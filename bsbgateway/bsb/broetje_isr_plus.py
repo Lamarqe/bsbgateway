@@ -578,6 +578,9 @@ groups = [
         BsbFieldInt8(0x233D04A7, 8795, u'Drehzahl Heizkreispumpe 3', unit='%', tn="PERCENT1"),
         BsbFieldTemperature(0x313d052f, 8830, u'Trinkwassertemperatur 1', ),
         BsbFieldTemperature(0x313d0530, 8832, u'Trinkwassertemperatur 2',),
+        BsbFieldTemperature(0x593D0537, 8410, u'Rücklauftemperatur WP',),
+        BsbFieldTemperature(0x593D0767, 8411, u'Sollwert WP',),
+        BsbFieldTemperature(0x593D052D, 8412, u'Vorlauftemperatur WP',),
    ]),
         
     Group(0, "Unsortiert", [
