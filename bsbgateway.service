@@ -1,0 +1,15 @@
+[Unit]
+Description=BSBGateway
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bsbgateway/bsbgateway.py
+WorkingDirectory=/usr/local/bsbgateway
+StandardOutput=inherit
+StandardError=inherit
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+
