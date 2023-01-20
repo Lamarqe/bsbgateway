@@ -523,6 +523,8 @@ groups = [
     ]),
     
     Group(8400, u"8400 Diagnose Solar", [
+        BsbFieldInt8(0x053D0D2A, 8413, u'Modulation des Kompressors', min=0, max=100, unit=u"%", tn="PERCENT", **RWN),
+        BsbFieldInt8(0x053D12F4, 8414, u'Elektro-Vorlauf Modulation', min=0, max=100, unit=u"%", tn="PERCENT", **RWN),
         BsbFieldChoice(0x053D09AB, 8499, u'Kollektorpumpe 1 (Aus)', choices=['Aus', 'Ein']),
         # FIXME: Statuswerte unbekannt
         BsbFieldChoice(0x053D0A89, 8501, u'Solarstellglied Puffer', choices=[]),
