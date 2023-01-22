@@ -32,7 +32,7 @@ from bsbgateway.hub.event import event
 from bsbgateway.hub.serial_source import SerialSource
 
 from .bsb_telegram import BsbTelegram
-from .bsb_field import ValidateError, EncodeError
+from .errors import ValidateError, EncodeError
 
 log = lambda: logging.getLogger(__name__)
 
