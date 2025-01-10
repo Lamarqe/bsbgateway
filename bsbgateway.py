@@ -30,7 +30,7 @@ adapter_settings = {
     #'adapter_device': ':sim',
     #'adapter_device': '/dev/ttyUSB0',
     #'adapter_device': '/dev/ttyS0',
-    'adapter_device': '/dev/ttyAMA3',
+    'adapter_device': '/dev/ttyAMA2',
     
     # hardware settings - ignored when using simulation.
     # see also bsbgateway/serial_source.py
