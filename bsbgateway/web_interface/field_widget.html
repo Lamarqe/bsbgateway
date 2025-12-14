@@ -24,7 +24,7 @@ $code:
 $if not field.rw:
     <span class="fieldvalue">$SELF.fmt_rovalue(field, value)</span>
 $else:
-    <form class="fieldsetter" action="field-$field.disp_id" method="POST" onsubmit="return submit_field_$(field.type_name)(this);">
+    <form class="fieldsetter" action="field-$(field.disp_id)" method="POST" onsubmit="return submit_field_$(field.type_name)(this);">
         $if field.type_name == 'choice':
             <select name="value">
                 $if field.nullable:
@@ -33,7 +33,7 @@ $else:
                 $ keys = [key for key in field.choices.keys()]
                 $ keys.sort()
                 $for key in keys:
-                    <option value="$key" $('selected' if key==vkey else '')>$key $field.choices[key]</option>
+                    <option value="$(key)" $('selected' if key==vkey else '')>$key $field.choices[key]</option>
             </select>
             
         $elif field.type_name == 'time':
@@ -49,7 +49,7 @@ $else:
         $# Sending no value sets the NULL value.
         <form
             class="fieldsetter"
-            action="field-$field.disp_id"
+            action="field-$(field.disp_id)"
             method="POST"
             onsubmit="submit_field_null(this);return false;"
         >

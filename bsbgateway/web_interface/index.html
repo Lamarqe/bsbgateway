@@ -37,6 +37,6 @@ $if fields:
 <h2>Parameter Groups</h2>
 <ul>
 $for group in groups:
-    <li><a href='group-$group.disp_id'>#$group.name</a></li>
+    <li><a href='group-$(group.disp_id)'>#$group.name</a></li>
 </ul>
 <script>$$(document).ready(load_all);</script>
