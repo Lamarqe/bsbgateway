@@ -20,15 +20,9 @@
 #
 ##############################################################################
 
-import sys
 import os
-#sys.path.append(os.path.dirname(__file__))
-
 import importlib
-
 import logging
-log = lambda: logging.getLogger(__name__)
-
 import time
 
 from .event_sources import SyncedSecondTimerSource, HubSource, DelaySource
@@ -39,6 +33,7 @@ from .email_action import make_email_action
 from .bsb.bsb_comm import BsbComm
 from .bsb.bsb_field import EncodeError, ValidateError
 
+LOGGER = logging.getLogger(__name__)
 
 class BsbGateway(object):
     _hub = None
@@ -55,7 +50,7 @@ class BsbGateway(object):
         o.cmd_interface = None
         
     def run(o):
-        log().info('BsbGateway (c) J. Loehnert 2013-2015, starting @%s'%time.time())
+        LOGGER.info('BsbGateway (c) J. Loehnert 2013-2015, starting @%s'%time.time())
         for logger in o.loggers:
             logger.send_get_telegram = lambda disp_id: o._bsbcomm.send_get(disp_id)
 
@@ -72,7 +67,7 @@ class BsbGateway(object):
             o.cmd_interface = CmdInterface(o)
             sources.append(o.cmd_interface)
         else:
-            log().info('Running without cmdline interface. Use Ctrl+C or SIGTERM to quit.')
+            LOGGER.info('Running without cmdline interface. Use Ctrl+C or SIGTERM to quit.')
         
         if o.web_interface_port:
             sources.append(WebInterface('web', device=o.device, port=o.web_interface_port, dashboard=o.web_dashboard) )
@@ -90,7 +85,7 @@ class BsbGateway(object):
         try:
             getattr(o, 'on_%s_event'%evtype)(evdata)
         except Exception as e:
-            log().exception('Something crashed while processing event {} with data {!r}'.format(evtype, evdata))
+            LOGGER.exception('Something crashed while processing event {} with data {!r}'.format(evtype, evdata))
 
     def on_timer_event(o, data):
         if int(time.time()) % o.atomic_interval!=0:
@@ -170,7 +165,7 @@ def run(config):
     
     if config['loggers']:
         if not os.path.exists(config['tracefile_dir']):
-            log().info('Creating trace directory %s'%config['tracefile_dir'])
+            LOGGER.info('Creating trace directory %s'%config['tracefile_dir'])
             os.makedirs(config['tracefile_dir'])
     loggers = [
         SingleFieldLogger(

@@ -7,7 +7,7 @@ logging.basicConfig(level="DEBUG")
 
 m = BsbModel.parse_file("bsb-types.json")
 m_1 = BsbModel.parse_file("bsb-parameter-stripped.json")
-m_2 = BsbModel.parse_file("broetje_isr_plus.json")
+m_2 = BsbModel.parse_file("fujitsu_waterstage_wsya.json")
 
 
 print("-- merge m1")

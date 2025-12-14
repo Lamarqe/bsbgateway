@@ -5,7 +5,7 @@ from pathlib import Path
 
 from ..bsb.model import BsbCommand, BsbCommandFlags, BsbDevice, BsbModel, BsbCategory, I18nstr, as_json, dedup_types
 from ..bsb.bsb_field import BsbField, BsbFieldChoice, BsbFieldInt8, BsbFieldInt16, BsbFieldInt32, BsbFieldTemperature, BsbFieldTime
-from ..bsb.broetje_isr_plus import Group
+from ..bsb.fujitsu_waterstage_wsya import Group
 
 def istr(text_de):
     """Create I18nStr instance from given text
@@ -137,10 +137,10 @@ def dump_types(model: BsbModel, filename: Path):
 if __name__ == "__main__":
     m = BsbModel.parse_file("bsb-types.json")
     load_reference_types(m)
-    from ..bsb.broetje_isr_plus import groups
+    from ..bsb.fujitsu_waterstage_wsya import groups
     m_convert = convert(groups)
     m_convert.types = {}
     json = as_json(m_convert)
-    with Path("broetje_isr_plus.json").open("w") as f:
+    with Path("fujitsu_waterstage_wsya.json").open("w") as f:
         f.write(json)
 

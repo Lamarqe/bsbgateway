@@ -18,25 +18,20 @@
 #
 ##############################################################################
 
-import sys
 import logging
-log = lambda: logging.getLogger(__name__)
 import datetime
 import time
 
 from .bsb.bsb_telegram import BsbTelegram
-from .bsb import broetje_isr_plus
+from .bsb import fujitsu_waterstage_wsya
 
-if sys.version_info[0] == 2:
-    ashex = lambda b: b.encode('hex')
-else:
-    ashex = lambda b: b.hex()
+LOGGER = logging.getLogger(__name__)
 
 def invert(data):
     return bytes(x ^ 0xff for x in data)
 
 
-def virtual_device(device=broetje_isr_plus):
+def virtual_device(device=fujitsu_waterstage_wsya):
     # TODO: uninvert bytes
     txdata = b''
     state = {}
@@ -45,11 +40,11 @@ def virtual_device(device=broetje_isr_plus):
         try:
             txdata = _handle(device, rxdata, state)
         except Exception:
-            log().error("Virtual device encountered internal error", exc_info=True)
+            LOGGER.error("Virtual device encountered internal error", exc_info=True)
             txdata = rxdata
 
 def _handle(device, rxdata, state):
-    log().debug('Virtual device receives: [%s]'%(ashex(rxdata)))
+    LOGGER.debug('Virtual device receives: [%s]'%(rxdata.hex(),))
 
     # read back written data (as the real bus adapter does)
     txdata = rxdata
@@ -59,14 +54,14 @@ def _handle(device, rxdata, state):
     # construct response
     rxdata = maybe_inv(rxdata)
     t = BsbTelegram.deserialize(rxdata, device)[0]
-    log().debug("decoded packet: %s", t)
+    LOGGER.debug("decoded packet: %s", t)
     if isinstance(t, tuple):
         # Bad packet. Do not send a response
         return rxdata
 
     # remember set value for session
     if t.packettype == 'set':
-        log().debug('cached value of %r'%(t.data,))
+        LOGGER.debug('cached value of %r'%(t.data,))
         state[t.field.disp_id] = t.data
     t.src, t.dst = t.dst, t.src
     data = rxdata
@@ -84,6 +79,6 @@ def _handle(device, rxdata, state):
     retdata = maybe_inv(retdata)
 
     time.sleep(0.1)
-    log().debug('Virtual device returns : [%s]'%ashex(retdata))
+    LOGGER.debug('Virtual device returns : [%s]'%retdata.hex())
     txdata += retdata
     return txdata
