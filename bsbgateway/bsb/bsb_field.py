@@ -33,8 +33,10 @@ if sys.version_info[0] > 2:
     basestring = str
 
 
-class EncodeError(Exception): pass
-class ValidateError(Exception): pass
+class EncodeError(Exception): 
+    pass
+class ValidateError(Exception): 
+    pass
 
 def xo(dict):
     return {k:v for k,v in dict.items() if k!='o'}
@@ -114,7 +116,8 @@ class BsbField(object):
             if o.nullable:
                 return 5 if val is None else 6
             else:
-                if val is None: raise EncodeError('Cannot encode Null value for non-nullable field %s.'%o.disp_id)
+                if val is None: 
+                    raise EncodeError('Cannot encode Null value for non-nullable field %s.'%o.disp_id)
                 return 1
         else:
             raise EncodeError('Can only encode value for packet type ret or set.')
@@ -168,7 +171,8 @@ class BsbFieldChoice(BsbField):
         if not isinstance(choices, dict):
             d = {}
             for n, choice in enumerate(choices):
-                if not choice: continue
+                if not choice: 
+                    continue
                 d[n] = choice
             o.choices = d
         else:
@@ -416,6 +420,8 @@ class BsbFieldTime(BsbField):
             h, m = val.hour, val.minute
         except AttributeError:
             raise EncodeError('Value %r misses hour and/or minute attribute.'%val)
-        if not isinstance(h, int) or h<0 or h>255: raise EncodeError('not a byte value: %r'%h)
-        if not isinstance(m, int) or m<0 or m>255: raise EncodeError('not a byte value: %r'%m)
+        if not isinstance(h, int) or h<0 or h>255: 
+            raise EncodeError('not a byte value: %r'%h)
+        if not isinstance(m, int) or m<0 or m>255: 
+            raise EncodeError('not a byte value: %r'%m)
         return [flag, h, m]

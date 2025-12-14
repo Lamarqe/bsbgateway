@@ -20,18 +20,18 @@
 
 import sys
 import os
+import logging
+import time
+
+from . import WebInterface
+
 up = os.path.dirname
 sys.path.append(up(up(__file__)))
 
-import logging
-log = lambda: logging.getLogger(__name__)
 logging.basicConfig(level=logging.DEBUG)
 
-import time
-
-if sys.version_info[0] > 2:
-    raw_input = input
-from . import WebInterface
+def log():
+    return logging.getLogger(__name__)
 
 class FakeField(object):
     def __init__(o):
@@ -76,5 +76,5 @@ wi.start_thread(br.on_event)
 
 log().warning('Running standalone test server with a mock backend. Press Enter to exit.')
 # Nothing to do on this thread anymore. Wait.
-raw_input()
+input()
 log().info('Goodbye...')

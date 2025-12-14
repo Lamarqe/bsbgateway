@@ -19,7 +19,6 @@
 ##############################################################################
 
 import logging
-log = lambda: logging.getLogger(__name__)
 
 from contextlib import contextmanager
 import threading
@@ -31,9 +30,11 @@ from bsbgateway.event_sources import EventSource
 from bsbgateway.serial_source import SerialSource
 
 from .bsb_telegram import BsbTelegram
-from .bsb_field import ValidateError, EncodeError
+from .bsb_field import EncodeError
 
 MAX_PENDING_REQUESTS = 50
+
+LOGGER = logging.getLogger(__name__)
 
 class BsbComm(EventSource):
     '''simplifies the conversion between serial data and BsbTelegrams.
@@ -124,7 +125,7 @@ class BsbComm(EventSource):
                         which_address = None
                     result.append((which_address, t))
             elif t[1] != 'incomplete telegram':
-                log().info('++++%r :: %s'%t )
+                LOGGER.info('++++%r :: %s'%t )
         return result
 
     def send_get(o, disp_id, which_address=0):
@@ -187,14 +188,14 @@ def throttle_factory(min_wait_s = 0.1, max_pending_requests=MAX_PENDING_REQUESTS
                 try:
                     action()
                 except Exception:
-                    log().error("Exception in throttle thread", exc_info=True)
+                    LOGGER.error("Exception in throttle thread", exc_info=True)
             action_end_time = time.time()
             action = todo.get()
             # Throttle using wallclock time
             # If todo.get() blocked for longer than min_wait_s, do not wait.
             wait_for = action_end_time + min_wait_s - time.time()
             if wait_for > 0.0:
-                log().debug("throttle: wait %s seconds", wait_for)
+                LOGGER.debug("throttle: wait %s seconds", wait_for)
                 stop.wait(wait_for)
 
     def do_throttled(action):

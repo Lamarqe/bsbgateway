@@ -18,19 +18,17 @@
 #
 ##############################################################################
 
-import sys
 import logging
-log = lambda: logging.getLogger(__name__)
 import web
-if sys.version_info[0] == 2:
-    from Queue import Queue
-else:
-    from queue import Queue
+from queue import Queue
 
 from bsbgateway.event_sources import EventSource
 from .index import Index
 from .field import Field
 from .group import Group
+
+def log():
+    return logging.getLogger(__name__)
 
 _HANDLERS = [
     Index,

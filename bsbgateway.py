@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 '''Configuration file template for BsbGateway.'''
 
-################################################
-# Python configuration
-
-# See https://docs.python.org/2/library/logging.html on how to configure logging.
-# You will probably want to set filename='something.log'.
 import logging
 import sys
+
+import bsbgateway
+
 logging.basicConfig(
     level='WARN',
     format='%(levelname)s %(name)s:%(lineno)d @%(relativeCreated)d -- %(message)s',
@@ -27,10 +25,10 @@ adapter_settings = {
     # * '/dev/ttyS0' ... '/dev/ttyS3' are usual devices for real serial ports.
     # * '/dev/ttyUSB0' is the usual device for a USB-to-serial converter on Linux.
     # * ':sim' opens a simple device simulation (no actual serial port required)
-    #'adapter_device': ':sim',
+    'adapter_device': ':sim',
     #'adapter_device': '/dev/ttyUSB0',
     #'adapter_device': '/dev/ttyS0',
-    'adapter_device': '/dev/ttyAMA2',
+    #'adapter_device': '/dev/ttyAMA2',
     
     # hardware settings - ignored when using simulation.
     # see also bsbgateway/serial_source.py
@@ -139,5 +137,4 @@ web_dashboard = [
 ################################################
 # Leave this alone
 
-import bsbgateway
 bsbgateway.run(globals())

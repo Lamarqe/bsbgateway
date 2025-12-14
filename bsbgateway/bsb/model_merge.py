@@ -55,7 +55,7 @@ def _(a:BsbModel, b:BsbModel) -> List[str]:
             try:
                 t_merge_log = merge(a.types[key], b.types[key])
             except MergeImmutableFieldError as e:
-                problems.extend(_prefix_with(f"types[key].", e.problems))
+                problems.extend(_prefix_with(f"types[{key}].", e.problems))
             else:
                 merge_log.extend(_prefix_with(f"types[{key}].", t_merge_log))
 
@@ -73,7 +73,8 @@ def _(a:BsbModel, b:BsbModel) -> List[str]:
             c_merge_log = merge(a.categories[key], b.categories[key])
             merge_log.extend(_prefix_with(f"categories[{key}].", c_merge_log))
 
-    _cmdid = lambda cmd: (cmd.parameter, cmd.command.lower(), cmd.device[0].family, cmd.device[0].var)
+    def _cmdid(cmd):
+          return (cmd.parameter, cmd.command.lower(), cmd.device[0].family, cmd.device[0].var)
     # Merge commands
     map_a = {
         cmd.uid: (catkey, cmd)

@@ -10,7 +10,7 @@ __all__ = [
     "dedup_types",
     "as_json",
 ]
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 #from pydantic import BaseModel
 import attr
 import cattr

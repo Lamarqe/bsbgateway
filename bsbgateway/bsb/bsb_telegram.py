@@ -19,13 +19,6 @@
 #
 ##############################################################################
 
-import sys
-if sys.version_info[0] == 2:
-    joinbytes = lambda ints: b''.join(map(chr, ints))
-    datatype = basestring
-else:
-    datatype = bytes
-    joinbytes = bytes
 
 from .crc16pure import crc16xmodem
 from .bsb_field import BsbField
@@ -44,7 +37,8 @@ _PACKETTYPES_R = {
     value: key for key, value in _PACKETTYPES.items()
 }
 
-class DecodeError(Exception): pass
+class DecodeError(Exception): 
+    pass
 
 class BsbTelegram(object):
     '''src = source address (0...255)
@@ -62,8 +56,6 @@ class BsbTelegram(object):
     data = None
 
     def __init__(o):
-        src = 0
-        dst = 0
         o.packettype = ''
         o.field = None
         o.rawdata = []
@@ -76,7 +68,7 @@ class BsbTelegram(object):
         Order follows the input stream order.
         '''
         indata = data
-        assert isinstance(indata, datatype)
+        assert isinstance(indata, bytes)
         result = []
 
         while indata:
@@ -188,7 +180,7 @@ class BsbTelegram(object):
         result.append((crc & 0xff00) >> 8)
         result.append(crc & 0xff)
 
-        return joinbytes(result)
+        return bytes(result)
 
     def __repr__(o):
         d = o.__dict__.copy()

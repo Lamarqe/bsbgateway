@@ -1,10 +1,9 @@
 """Conversion of BSB Field(s) to model data"""
-from multiprocessing.sharedctypes import Value
 from typing import List
 from datetime import datetime
 from pathlib import Path
 
-from ..bsb.model import BsbCommand, BsbCommandFlags, BsbDatatype, BsbDevice, BsbModel, BsbCategory, BsbType, I18nstr, as_json, dedup_types
+from ..bsb.model import BsbCommand, BsbCommandFlags, BsbDevice, BsbModel, BsbCategory, I18nstr, as_json, dedup_types
 from ..bsb.bsb_field import BsbField, BsbFieldChoice, BsbFieldInt8, BsbFieldInt16, BsbFieldInt32, BsbFieldTemperature, BsbFieldTime
 from ..bsb.broetje_isr_plus import Group
 
