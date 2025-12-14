@@ -21,13 +21,11 @@
 import sys
 import time
 import logging
-log = lambda: logging.getLogger(__name__)
 
-if sys.version_info[0] == 2:
-    from Queue import Queue
-else:
-    from queue import Queue
+from queue import Queue
 from threading import Thread, Event, Lock
+
+LOGGER = logging.getLogger(__name__)
 
 __all__ = ['EventSource', 'StdinSource', 'TimerSource', 'SyncedSecondTimerSource', 'DelaySource', 'HubSource']
 
@@ -90,7 +88,7 @@ class EventSource(object):
         #    print repr(e)
         #    return
         o._running = False
-        log().debug('event source %s exited.'%o.name)
+        LOGGER.debug('event source %s exited.'%o.name)
 
     def stop(o):
         '''stop the event source if running.
@@ -102,7 +100,7 @@ class EventSource(object):
         if not o._running:
             return
         if not o.stoppable:
-            log().debug('event source %s will stop somewhen...'%o.name)
+            LOGGER.debug('event source %s will stop somewhen...'%o.name)
         o._stopflag = True
 
 
