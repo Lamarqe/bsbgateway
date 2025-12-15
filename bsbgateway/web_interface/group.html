@@ -25,7 +25,7 @@ $code:
 
 <ul>
 $for f in group.fields:
-    <li class="fieldcontainer" id="fieldcontainer-$f.disp_id">
+    <li class="fieldcontainer" id="fieldcontainer-$(f.disp_id)">
         $:field_func(f)
     </li>
 </ul>

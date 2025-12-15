@@ -22,10 +22,10 @@ $code:
 
 
 
-<button onclick="$$('#fieldwidget-$field.disp_id').load('field-$(field.disp_id).widget');" value="Load">
+<button onclick="$$('#fieldwidget-$(field.disp_id)').load('field-$(field.disp_id).widget');" value="Load">
 <span class="fieldid">$field.disp_id</span>
 </button>
 <span class="fieldname">$field.disp_name</span>:
-<span class="fieldwidget" id="fieldwidget-$field.disp_id">
+<span class="fieldwidget" id="fieldwidget-$(field.disp_id)">
 </span>
-<span class="fieldsetresult" id="fieldsetresult-$field.disp_id"></span>
+<span class="fieldsetresult" id="fieldsetresult-$(field.disp_id)"></span>
