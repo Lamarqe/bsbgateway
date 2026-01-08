@@ -113,6 +113,8 @@ class CmdInterface(EventSource):
         
     def on_stdin_event(o, evtype, line):
         line = line[:-1] # crop newline
+        if not line.strip():
+            return
         for cmd in CMDS:
             m = re.match(cmd['re'], line, re.I)
             if m:
@@ -124,7 +126,7 @@ class CmdInterface(EventSource):
                     print('Error: '+str(e))
                 break
         else:
-            print('Unrecognized command.')
+            print('Unrecognized command:', repr(line))
         
     def cmd_quit(o):
         o.bsb.quit()
