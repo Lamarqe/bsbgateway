@@ -23,10 +23,14 @@
 import re
 import datetime
 import logging
-log = lambda: logging.getLogger(__name__)
 
-from .event_sources import EventSource, StdinSource
+from bsbgateway.bsb.bsb_telegram import BsbTelegram
+from bsbgateway.hub.event import event
+
+from .hub.event_sources import EventSource, StdinSource
 from .bsb.bsb_field import ValidateError, EncodeError
+
+log = lambda: logging.getLogger(__name__)
 
 CMDS = [
     {
@@ -100,18 +104,32 @@ CMDS = [
 ]
 
 class CmdInterface(EventSource):
-    def __init__(o, bsbgateway):
-        o.bsb = bsbgateway
-        o.device = bsbgateway.device
-        o.stdin_source = StdinSource('stdin')
+    def __init__(o, device, bsb_address=24):
+        o.device = device
+        o.bsb_address = bsb_address
+        o.stdin_source = StdinSource()
+        o.stdin_source.line += o.on_stdin_event
         # This is eval'd, so use text string.
         o._dump_filter = 'False'
     
-    def run(o, putevent):
+    @event
+    def quit():
+        """Request to quit the gateway."""
+
+    @event
+    def send_get(disp_id: int, from_address: int): #type: ignore
+        """Request to get a field value from BSB device."""
+
+    @event
+    def send_set(disp_id: int, value, from_address: int, validate: bool): #type: ignore
+        """Request to set a field value on BSB device."""
+
+
+    def run(o):
         o.cmd_help()
-        o.stdin_source.run(o.on_stdin_event)
+        o.stdin_source.run()
         
-    def on_stdin_event(o, evtype, line):
+    def on_stdin_event(o, line):
         line = line[:-1] # crop newline
         if not line.strip():
             return
@@ -127,14 +145,22 @@ class CmdInterface(EventSource):
                 break
         else:
             print('Unrecognized command:', repr(line))
+
+    def on_bsb_telegrams(o, telegrams: list[BsbTelegram]):
+        for telegram in telegrams:
+            o.filtered_print(telegram)
+
+    def on_send_error(o, error: Exception, disp_id: int, from_address: int):
+        if from_address == o.bsb_address:
+            print('Error sending to field %d: %s'%(disp_id, str(error)))
         
     def cmd_quit(o):
-        o.bsb.quit()
+        o.quit()
                         
     def cmd_get(o, disp_id):
         disp_id = int(disp_id)
         try:
-            o.bsb.cmdline_get(disp_id)
+            o.send_get(disp_id, o.bsb_address)
         except (ValidateError, EncodeError) as e:
             print(e.__class__.__name__ +': '+ str(e))
         
@@ -162,7 +188,9 @@ class CmdInterface(EventSource):
                 print(e)
                 return
         try:
-            o.bsb.cmdline_set(field.disp_id, value, validate=(use_force!='!'))
+            # TOOD: put as event
+            validate=(use_force!='!')
+            o.send_set(disp_id, value, o.bsb_address, validate)
         except (ValidateError, EncodeError) as e:
             print(e.__class__.__name__ +': '+ str(e))
             
@@ -172,7 +200,6 @@ class CmdInterface(EventSource):
             expr = 'on' if o._dump_filter == 'False' else 'off'
             
         if expr == 'off':
-            o.bsb.set_sniffmode(False)
             o._dump_filter = 'False'
             print('dump is now off.')
             log().debug('dump filter: %r'%o._dump_filter)
@@ -193,7 +220,6 @@ class CmdInterface(EventSource):
         print('dump is now on.')
         o._dump_filter = expr
         log().debug('dump filter: %r'%o._dump_filter)
-        o.bsb.set_sniffmode(True)
         
     def cmd_list(o, text='', hash='', expand=''):
         '''list [<text>][+]: list field groups.
@@ -268,7 +294,7 @@ Commands: (every command can be abbreviated to just the first character)
                 print(cmd[0]['help'])
                 
         
-    def filtered_print(o, which_address, telegram):
+    def filtered_print(o, telegram):
         log().debug('applying filter to %r'%telegram)
         try:
             ff = eval(o._dump_filter, {}, {
@@ -279,5 +305,5 @@ Commands: (every command can be abbreviated to just the first character)
         except Exception as e:
             log().error('error applying filter: %r'%e)
             ff = False
-        if which_address==1 or ff is True:
+        if telegram.dst==o.bsb_address or ff is True:
             print(repr(telegram))

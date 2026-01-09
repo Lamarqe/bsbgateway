@@ -27,8 +27,9 @@ import queue
 import time
 
 # FIXME: importing from parent, this smells bad
-from bsbgateway.event_sources import EventSource
-from bsbgateway.serial_source import SerialSource
+from bsbgateway.hub.event_sources import EventSource
+from bsbgateway.hub.event import event
+from bsbgateway.hub.serial_source import SerialSource
 
 from .bsb_telegram import BsbTelegram
 from .bsb_field import ValidateError, EncodeError
@@ -41,30 +42,13 @@ class BsbComm(EventSource):
     send and receive BsbTelegrams. 
     
     Wrapper around the serial source: instead of raw data,
-    the parsed telegrams are returned. Event payload is a list of tuples:
-        [(which_address, BsbTelegram), (which_address, BsbTelegram) ...].
-    which address gives the index of the bus address where the telegram came in
-    (0 for first) - None if the telegram was not intended for this endpoint.
-    
-    Functions for sending:
-        * send_get: sends a telegram requesting the disp_id's value
-        * send_set: sends a telegram setting the value for disp_id.
-        
-    Also supports sniffing (i.e. catching messages for other endpoints). 
-    Set sniffmode=True for this. Can be toggled while running.
+    the parsed telegrams are returned. Event payload is a list of BsbTelegrams.
     '''
     bus_addresses = []
-    # set to true to return ALL telegrams going over the bus (not just those meant for me)
-    sniffmode = False
     _leftover_data = b''
     
-    def __init__(o, name, adapter_settings, device, first_bus_address, n_addresses=1, sniffmode=False, min_wait_s=0.1):
-        if (first_bus_address<=10):
-            raise ValueError("First bus address must be >10.")
-        if (first_bus_address+n_addresses>127):
-            raise ValueError("Last bus address must be <128.")
+    def __init__(o, adapter_settings, device,  min_wait_s=0.1):
         o.serial = SerialSource(
-            name=name,
             port_num=adapter_settings['adapter_device'],
             # use sane default values for the rest if not set
             port_baud=adapter_settings.get('port_baud', 4800),
@@ -76,23 +60,37 @@ class BsbComm(EventSource):
             write_retry_time=adapter_settings.get('write_retry_time', 0.005),
         )
         o.device = device
-        o.bus_addresses = range(first_bus_address, first_bus_address+n_addresses)
         o._leftover_data = b''
-        o.sniffmode = sniffmode
         o.min_wait_s = min_wait_s
         o._do_throttled = None
         
-    def run(o, putevent_func):
-        def convert_data(name, data):
-            # data = timestamp,bytes
-            telegrams = o.process_received_data(data[0], data[1])
-            putevent_func(name, telegrams)
+    @event
+    def bsb_telegrams(telegrams:list[BsbTelegram]):
+        '''Emitted when telegrams are received from BSB bus.
+        
+        Payload is a list of BsbTelegrams instances.
+        '''
+
+    @event
+    def send_error(error:Exception, disp_id:int, from_address:int):
+        '''Emitted when sending a telegram failed.
+        
+        Payload is (error, disp_id, from_address).
+
+        Errors might occur due to validation errors, encoding errors or failed IO.
+        '''
+
+    def run(o):
+        def convert_data(timestamp, data):
+            telegrams = o.process_received_data(timestamp, data)
+            o.bsb_telegrams(telegrams)
+        o.serial.data += convert_data
         with throttle_factory(min_wait_s=o.min_wait_s) as do_throttled:
             o._do_throttled = do_throttled
-            o.serial.run(convert_data)
+            o.serial.run()
         o._do_throttled = None
         
-    def process_received_data(o, timestamp, data):
+    def process_received_data(o, timestamp, data) -> list[BsbTelegram]:
         '''timestamp: unix timestamp
         data: incoming data (byte string) from the serial port
         return list of (which_address, telegram)
@@ -105,7 +103,7 @@ class BsbComm(EventSource):
         telegrams = BsbTelegram.deserialize(o._leftover_data + data, o.device)
         result = []
         if not telegrams:
-            return
+            return result
         # junk at the end? remember, it could be an incomplete telegram.
         leftover = b''
         for data in reversed(telegrams):
@@ -117,29 +115,27 @@ class BsbComm(EventSource):
         for t in telegrams:
             if isinstance(t, BsbTelegram):
                 t.timestamp = timestamp
-                if t.dst in o.bus_addresses or o.sniffmode:
-                    try:
-                        which_address = o.bus_addresses.index(t.dst)
-                    except ValueError:
-                        which_address = None
-                    result.append((which_address, t))
+                result.append(t)
             elif t[1] != 'incomplete telegram':
                 log().info('++++%r :: %s'%t )
         return result
 
-    def send_get(o, disp_id, which_address=0):
+    def send_get(o, disp_id, from_address):
         '''sends a GET request for the given disp_id.
         which_address: which busadress to use, default 0 (the first)'''
         if disp_id not in o.device.fields:
             raise EncodeError('unknown field')
         t = BsbTelegram()
-        t.src = o.bus_addresses[which_address]
+        t.src = from_address
         t.dst = 0
         t.packettype = 'get'
         t.field = o.device.fields[disp_id]
-        o._send_throttled(t.serialize())
+        try:
+            o._send_throttled(t.serialize())
+        except (ValidateError, EncodeError, IOError) as e:
+            o.send_error(e, disp_id, from_address)
 
-    def send_set(o, disp_id, value, which_address=0, validate=True):
+    def send_set(o, disp_id, value, from_address, validate=True):
         '''sends a SET request for the given disp_id.
         value is a python value which must be appropriate for the field's type.
         which_address: which busadress to use, default 0 (the first).
@@ -148,14 +144,17 @@ class BsbComm(EventSource):
         if disp_id not in o.device.fields:
             raise EncodeError('unknown field')
         t = BsbTelegram()
-        t.src = o.bus_addresses[which_address]
+        t.src = from_address
         t.dst = 0
         t.packettype = 'set'
         t.field = o.device.fields[disp_id]
         t.data = value
         # might throw ValidateError or EncodeError.
-        data = t.serialize(validate=validate)
-        o._send_throttled(data)
+        try:
+            data = t.serialize(validate=validate)
+            o._send_throttled(data)
+        except (ValidateError, EncodeError, IOError) as e:
+            o.send_error(e, disp_id, from_address)
 
     def _send_throttled(o, data:bytes):
         if not o._do_throttled:

@@ -110,7 +110,10 @@ class Field(object):
         if field.type_name in ['int8', 'choice']:
             if value is not None:
                 value = int(value)
-        field.validate(value)
+        try:
+            field.validate(value)
+        except Exception as e:
+            raise web.HTTPError("500", headers=_ERRHEADERS, data=str(e))
         log().info('set field %d to value %r'%(field.disp_id, value))
         queue = web.ctx.bsb.set(field.disp_id, value)
         try:

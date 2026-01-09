@@ -18,18 +18,16 @@
 #
 ##############################################################################
 
-import sys
 import time
 from threading import Thread
-if sys.version_info[0] == 2:
-    import Queue as queue
-    range = xrange
-else:
-    import queue
+import queue
 import serial
+from serial import Serial
 
-from .virtual_serial import VirtualSerial
-from .virtual_device import virtual_device
+from bsbgateway.hub.event import event
+
+from ..virtual_serial import VirtualSerial
+from ..virtual_device import virtual_device
 from .event_sources import EventSource
 
 
@@ -60,7 +58,6 @@ class SerialSource(EventSource):
         
     """
     def __init__(o,
-        name,
         port_num,
         port_baud,
         port_stopbits=1,
@@ -69,15 +66,13 @@ class SerialSource(EventSource):
         expect_cts_state = None,
         write_retry_time = 0.01,
     ):
-        o.name = name
         o.stoppable = True
-        o.serial_port = None
+        o.serial_port:Serial|VirtualSerial = None
         o._invert_bytes = invert_bytes
 
         o._expect_cts_state = expect_cts_state
         o._write_retry_time = write_retry_time
         o._write_retry_queue = queue.Queue()
-
 
         o._serial_arg = dict( 
             port=port_num,
@@ -95,15 +90,21 @@ class SerialSource(EventSource):
             timeout=1.0,
         )
 
+    @event
+    def data(timestamp:float, data:bytes): # type:ignore
+        """Data received from the serial port.
+        
+        Payload is a bytes object.
+        """
 
-    def run(o, putevent_func):
+    def run(o):
         if o._serial_arg["port"] == ":sim":
             o.serial_port = VirtualSerial(**o._serial_arg, responder=virtual_device)
         else:
             o.serial_port = serial.Serial(**o._serial_arg)
         # activate power supply
-        o.serial_port.setRTS(False)
-        o.serial_port.setDTR(True)
+        o.serial_port.rts = False
+        o.serial_port.dtr = True
 
         # start delay-write thread if needed
         if o._expect_cts_state is not None:
@@ -116,7 +117,7 @@ class SerialSource(EventSource):
             # PySerial.
             # read() blocks at most for (timeout)=1 second.
             data = o.serial_port.read(1)
-            data += o.serial_port.read(o.serial_port.inWaiting())
+            data += o.serial_port.read(o.serial_port.in_waiting)
             if o._stopflag:
                 break
 
@@ -127,7 +128,7 @@ class SerialSource(EventSource):
                     for i in range(len(data)):
                         data[i] ^= 0xff
                     data = bytes(data)
-                putevent_func(o.name, (timestamp, data))
+                o.data(timestamp, data)
         o.serial_port.close()
 
     def write(o, data):
@@ -158,7 +159,7 @@ class SerialSource(EventSource):
             time.sleep(o._write_retry_time)
             # wait until clear to send
             cnt = 0
-            while cnt < 100 and o.serial_port.getCTS() != o._expect_cts_state:
+            while cnt < 100 and o.serial_port.cts != o._expect_cts_state:
                 time.sleep(o._write_retry_time)
                 cnt += 1
                 if o._stopflag: return

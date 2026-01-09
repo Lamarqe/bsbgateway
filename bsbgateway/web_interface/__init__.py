@@ -18,19 +18,19 @@
 #
 ##############################################################################
 
-import sys
 import logging
-log = lambda: logging.getLogger(__name__)
-import web
-if sys.version_info[0] == 2:
-    from Queue import Queue
-else:
-    from queue import Queue
 
-from bsbgateway.event_sources import EventSource
+import web
+from queue import Queue
+
+from bsbgateway.bsb.bsb_field import EncodeError, ValidateError
+from bsbgateway.hub.event_sources import EventSource
+from bsbgateway.hub.event import event
 from .index import Index
 from .field import Field
 from .group import Group
+
+log = lambda: logging.getLogger(__name__)
 
 _HANDLERS = [
     Index,
@@ -54,9 +54,10 @@ def print_handlers(urls):
     log().info('\n    '.join(s))
 
 class WebInterface(EventSource):
-    def __init__(o, name, device, port=8080, dashboard=None):
-        o.name = name
+    def __init__(o, device, port=8080, dashboard=None, bsb_address=25):
         o.device = device
+        o.web2bsb = Web2Bsb(device, bsb_address=bsb_address)
+
         o.port = port
         dash_fields = []
         dash_breaks = []
@@ -72,8 +73,8 @@ class WebInterface(EventSource):
         o.dash_breaks = dash_breaks[1:]
         o.stoppable = False
         o.server = None
-        
-    def run(o, putevent):
+
+    def run(o):
         urls = []
         for cls in _HANDLERS:
             urls.append('/' + cls.url)
@@ -82,7 +83,7 @@ class WebInterface(EventSource):
         print_handlers(urls)
         
         app = web.application(urls)
-        app.add_processor(add_to_ctx(Web2Bsb(o.name, o.device, putevent), 'bsb'))
+        app.add_processor(add_to_ctx(o.web2bsb, 'bsb'))
         app.add_processor(add_to_ctx(o.dash_fields, "dash_fields"))
         app.add_processor(add_to_ctx(o.dash_breaks, "dash_breaks"))
         #web.httpserver.runsimple(app.wsgifunc(), ("0.0.0.0", o.port)) 
@@ -104,13 +105,14 @@ class WebInterface(EventSource):
             o.server.stop()
             o.server = None
 
+
 class Web2Bsb(object):
     '''provides the connection from web to backend.'''
-    def __init__(o, evname, device, putevent):
-        o.evname = evname
+    def __init__(o, device, bsb_address=25):
         o.device = device
-        o.putevent = putevent
-        
+        o.bsb_address = bsb_address
+        o.pending_web_requests = []
+
     @property
     def fields(o):
         return o.device.fields
@@ -118,17 +120,63 @@ class Web2Bsb(object):
     @property
     def groups(o):
         return o.device.groups
+
+    @event
+    def send_get(disp_id:str, from_address:int): # type:ignore
+        """Request to get a field value from BSB device.
         
-    def get(o, disp_id):
+        disp_id: display id of the field to get.
+        bsb_address: address to use on the BSB bus.
+        """
+
+    @event
+    def send_set(disp_id:str, value, from_address:int, validate:bool): # type:ignore
+        """Request to set a field value on BSB device.
+        
+        disp_id: display id of the field to set.
+        value: string representation of the value to set.
+        bsb_address: address to use on the BSB bus.
+        """
+        
+    def get(o, disp_id:int):
+        """called by web handlers to get a field value from BSB device."""
         rq = Queue()
-        o.putevent(o.evname, [rq, 'get', disp_id])
+        o._bsb_send(rq, 'get', disp_id)
         return rq
         
-    def set(o, disp_id, value):
-        # FIXME: who decodes the value (str -> val)?
+    def set(o, disp_id:int, value:str):
+        """called by web handlers to set a field value on BSB device."""
         rq = Queue()
-        o.putevent(o.evname, [rq, 'set', disp_id, value])
+        o._bsb_send(rq, 'set', disp_id, value)
         return rq
+
+    def _bsb_send(o, rq, action, disp_id, value=None):
+        if action == 'get':
+            o.pending_web_requests.append(('ret%d'%disp_id, rq))
+            o.send_get(disp_id, o.bsb_address)
+        elif action == 'set':
+            o.pending_web_requests.append(('ack%d'%disp_id, rq))
+            o.send_set(disp_id, value, o.bsb_address, validate=True)
+        else:
+            raise ValueError('unsupported action')
+    
+    def on_bsb_telegrams(o, telegrams):
+        for telegram in telegrams:
+            if telegram.dst==o.bsb_address and telegram.packettype in ['ret', 'ack']:
+                key = '%s%d'%(telegram.packettype, telegram.field.disp_id)
+                # Answer ALL pending requests for that field.
+                for rq in o.pending_web_requests:
+                    if rq[0] == key:
+                        rq[1].put(telegram)
+                # and remove from pending-list
+                o.pending_web_requests = [rq for rq in o.pending_web_requests if rq[0] != key]
+
+    def on_send_error(o, error: Exception, disp_id: int, from_address: int):
+        for (key, rq) in o.pending_web_requests:
+            if key in ('ret%d'%disp_id, 'ack%d'%disp_id):
+                rq.put(error)
+        o.pending_web_requests = [rq for rq in o.pending_web_requests if rq[0] not in ('ret%d'%disp_id, 'ack%d'%disp_id)]
+
         
         
 # Ripped from web.httpserver, and somewhat modified.

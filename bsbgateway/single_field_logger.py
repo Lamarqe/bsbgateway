@@ -21,27 +21,35 @@
 import time
 import os
 
+from bsbgateway.hub.event import event
 
-class SingleFieldLogger(object):
+
+class SingleFieldLogger:
     _last_save_time = 0
     _last_saved_value = None
     _dtype = ''
     _last_was_value = False
     
-    def __init__(o, field, interval=1, atomic_interval=1, send_get_telegram=None, filename=''):
+    def __init__(o, field, interval=1, atomic_interval=1, filename='', bsb_address=23):
         o.field = field
         o.interval = interval
         o.atomic_interval = atomic_interval
-        o.send_get_telegram = send_get_telegram
+        o.bsb_address = bsb_address
         # list of fn(prev_val, this_val)
         o.triggers = []
         # list of timestamps when trigger was last fired.
         o.trigger_timestamps = []
+        o.putevent_func = lambda evname, evdata: None
         
         o.filename = filename or '%d.trace'%o.field.disp_id
         if not os.path.exists(filename):
             o.log_fieldname()
         o.log_interval()
+    
+    @event
+    def send_get(disp_id:int, from_address:int): # type:ignore
+        """Request to get the field value from BSB device.
+        """
         
     def add_trigger(o, callback, triggertype, param1=None, param2=None):
         '''callback: void fn()
@@ -84,9 +92,17 @@ class SingleFieldLogger(object):
         return o.atomic_interval * int(time.time() / o.atomic_interval)
         
     def tick(o):
+        if int(time.time()) % o.atomic_interval!=0:
+            return
         t = o.get_now()
         if t % o.interval == 0:
-            o.send_get_telegram(o.field.disp_id)
+            o.send_get(o.field.disp_id, o.bsb_address)
+
+    def on_bsb_telegrams(o, telegrams):
+        for  telegram in telegrams:
+            if telegram.dst==o.bsb_address and telegram.packettype=="ret":
+                if o.field.disp_id == telegram.field.disp_id:
+                    o.log_value(telegram.timestamp, telegram.data)
             
     def log_value(o, timestamp, value):
         t = o.atomic_interval * int(timestamp  / o.atomic_interval)

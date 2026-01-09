@@ -3,7 +3,7 @@
 ##############################################################################
 #
 #    Part of BsbGateway
-#    Copyright (C) Johannes Loehnert, 2013-2015
+#    Copyright (C) Johannes Loehnert, 2013-2026
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU Lesser General Public License as published by
@@ -20,143 +20,123 @@
 #
 ##############################################################################
 
-import sys
 import os
 #sys.path.append(os.path.dirname(__file__))
 
 import importlib
-
 import logging
-log = lambda: logging.getLogger(__name__)
-
+from queue import Queue
 import time
 
-from .event_sources import SyncedSecondTimerSource, HubSource, DelaySource
+from .hub.event_sources import SyncedSecondTimerSource
 from .single_field_logger import SingleFieldLogger
 from .web_interface import WebInterface
 from .cmd_interface import CmdInterface
 from .email_action import make_email_action
 from .bsb.bsb_comm import BsbComm
-from .bsb.bsb_field import EncodeError, ValidateError
+
+log = lambda: logging.getLogger(__name__)
 
 
 class BsbGateway(object):
-    _hub = None
-
-    def __init__(o, adapter_settings, device, bus_address, loggers, atomic_interval, web_interface_port=8080, web_dashboard=None, cmd_interface_enable=True, min_wait_s=0.1):
+    def __init__(o, bsbcomm, device, loggers, cmd_interface=None,web_interface=None):
+        o._queue = Queue()
+        o._running = False
         o.device = device
-        o._bsbcomm = BsbComm('bsb', adapter_settings, device, bus_address, n_addresses=3, min_wait_s=min_wait_s)
+        """Device information object: contains field definitions etc."""
+
+        # Modules
+        o._timer = SyncedSecondTimerSource()
+        o._bsbcomm = bsbcomm
         o.loggers = loggers
-        o.atomic_interval = atomic_interval
-        o.web_interface_port = web_interface_port
-        o.web_dashboard = web_dashboard or []
-        o.pending_web_requests = []
-        o._cmd_interface_enable = cmd_interface_enable
-        o.cmd_interface = None
+        o.web_interface = web_interface
+        o.cmd_interface = cmd_interface
         
     def run(o):
-        log().info('BsbGateway (c) J. Loehnert 2013-2015, starting @%s'%time.time())
-        for logger in o.loggers:
-            logger.send_get_telegram = lambda disp_id: o._bsbcomm.send_get(disp_id)
+        log().info('BsbGateway (c) J. Loehnert 2013-2026, starting @%s'%time.time())
+        o.setup_modules()
+        o.run_eventloop()
 
-        o._delay = DelaySource("delay")
+
+    def setup_modules(o):
+        def _marshal(handler):
+            '''makes a handler that puts the action into the main event queue.'''
+            def marshaled_handler(*args, **kwargs):
+                o._queue.put(lambda: handler(*args, **kwargs))
+            return marshaled_handler
+
+        # Timer
+        o._timer.tick += _marshal(o.on_timer_tick)
+        o._timer.start_thread()
+
+        # BSB Comm
+        o._bsbcomm.bsb_telegrams += _marshal(o.on_bsb_telegrams)
+        o._bsbcomm.send_error += _marshal(o.on_send_error)
+        o._bsbcomm.start_thread()
         
-        sources = [
-            SyncedSecondTimerSource('timer'),
-            o._delay,
-            o._bsbcomm,
-        ]
-        
-        # Configuration switch tbd
-        if o._cmd_interface_enable:
-            o.cmd_interface = CmdInterface(o)
-            sources.append(o.cmd_interface)
+        if o.cmd_interface:
+            o.cmd_interface.quit += _marshal(o.quit)
+            o.cmd_interface.send_get += _marshal(o.on_send_get)
+            o.cmd_interface.send_set += _marshal(o.on_send_set)
+            o.cmd_interface.start_thread()
         else:
             log().info('Running without cmdline interface. Use Ctrl+C or SIGTERM to quit.')
         
-        if o.web_interface_port:
-            sources.append(WebInterface('web', device=o.device, port=o.web_interface_port, dashboard=o.web_dashboard) )
-            
-        o._hub = HubSource()
-        for source in sources:
-            o._hub.add_and_start_source(source)
+        if o.web_interface:
+            o.web_interface.web2bsb.send_get += _marshal(o.on_send_get)
+            o.web_interface.web2bsb.send_set += _marshal(o.on_send_set)
+            o.web_interface.start_thread()
 
-        try:
-            o._hub.start_thread(o._dispatch_event, new_thread=False)
-        except KeyboardInterrupt:
-            o.quit()
+        for logger in o.loggers:
+            logger.send_get += _marshal(o.on_send_get)
+            # Logger driven by timer tick - no need to start
+
+
+    def run_eventloop(o):
+        """Pull events from the queue and dispatch them.
+        
+        Stops when o._running flag is cleared.
+        """
+        o._running = True
+        while o._running:
+            action = o._queue.get()
+            try:
+                action()
+            except Exception as e:
+                log().exception("Internal error: {e}")
 
     def _dispatch_event(o, evtype, evdata):
-        try:
             getattr(o, 'on_%s_event'%evtype)(evdata)
-        except Exception as e:
-            log().exception('Something crashed while processing event {} with data {!r}'.format(evtype, evdata))
 
-    def on_timer_event(o, data):
-        if int(time.time()) % o.atomic_interval!=0:
-            return
+    def on_timer_tick(o):
         for logger in o.loggers:
             logger.tick()
-            
-    def on_bsb_event(o, telegrams):
-        for which_address, telegram in telegrams:
-            if o.cmd_interface:
-                if o._bsbcomm.sniffmode or which_address==1:
-                    o.cmd_interface.filtered_print(which_address, telegram)
-            if which_address==0 and telegram.packettype == 'ret':
-                for logger in o.loggers:
-                    if logger.field.disp_id == telegram.field.disp_id:
-                        logger.log_value(telegram.timestamp, telegram.data)
-            if which_address==2 and telegram.packettype in ['ret', 'ack']:
-                key = '%s%d'%(telegram.packettype, telegram.field.disp_id)
-                # Answer ALL pending requests for that field.
-                for rq in o.pending_web_requests:
-                    if rq[0] == key:
-                        rq[1].put(telegram)
-                # and remove from pending-list
-                o.pending_web_requests = [rq for rq in o.pending_web_requests if rq[0] != key]
-                        
-    def on_web_event(o, request):
-        # FIXME: rate limit 10/s
-        rq = request.pop(0) # the result queue
-        action = request.pop(0)
-        if action == 'get':
-            disp_id = request[0]
-            o.pending_web_requests.append(('ret%d'%disp_id, rq))
-            try:
-                o._bsbcomm.send_get(disp_id, 2)
-            except (ValidateError, EncodeError, RuntimeError) as e:
-                rq.put(e)
-        elif action == 'set':
-            disp_id, value = request
-            o.pending_web_requests.append(('ack%d'%disp_id, rq))
-            try:
-                o._bsbcomm.send_set(disp_id, value, 2)
-            except (ValidateError, EncodeError, RuntimeError) as e:
-                rq.put(e)
-        else:
-            raise ValueError('unsupported action')
-        # If no response arrives, put back timeout.
-        # If response arrived in time, the Timeout just vanishes with the queue.
-        def return_timeout():
-            rq.put(TimeoutError("No response from BSB device"))
-        o._delay.delay(return_timeout, 3.0)
 
-    def on_delay_event(o, action):
-        action()
-        
+    def on_bsb_telegrams(o, telegrams):
+        if o.cmd_interface:
+            o.cmd_interface.on_bsb_telegrams(telegrams)
+        if o.web_interface:
+            o.web_interface.web2bsb.on_bsb_telegrams(telegrams)
+        for logger in o.loggers:
+            logger.on_bsb_telegrams(telegrams)
+
+    def on_send_error(o, error: Exception, disp_id: int, from_address: int):
+        if o.cmd_interface:
+            o.cmd_interface.on_send_error(error, disp_id, from_address)
+        if o.web_interface:
+            o.web_interface.web2bsb.on_send_error(error, disp_id, from_address)
+
+    def on_send_get(o, disp_id:int, from_address:int):
+        o._bsbcomm.send_get(disp_id, from_address)
+
+    def on_send_set(o, disp_id:int, value, from_address:int, validate:bool=True):
+        o._bsbcomm.send_set(disp_id, value, from_address, validate=validate)
+                        
     def quit(o):
-        o._hub.stop()
-        
-    def cmdline_get(o, disp_id):
-        o._bsbcomm.send_get(disp_id, 1)
+        o._running = False
         
     def cmdline_set(o, disp_id, value, validate=True):
         o._bsbcomm.send_set(disp_id, value, 1, validate=validate)
-        
-    def set_sniffmode(o, sniffmode=False):
-        o._bsbcomm.sniffmode = sniffmode
-        
 
 def run(config):
     try:
@@ -167,6 +147,8 @@ def run(config):
         raise ValueError('Unsupported device')
     
     emailaction = make_email_action(config['emailserver'], config['emailaddress'], config['emailcredentials'])
+
+    bsbcomm = BsbComm(config['adapter_settings'], device, min_wait_s=config.get('min_wait_s', 0.1))
     
     if config['loggers']:
         if not os.path.exists(config['tracefile_dir']):
@@ -177,10 +159,24 @@ def run(config):
             field=device.fields[disp_id],
             interval=interval, 
             atomic_interval=config['atomic_interval'],
-            filename=os.path.join(config['tracefile_dir'], '%d.trace'%disp_id)
+            filename=os.path.join(config['tracefile_dir'], '%d.trace'%disp_id),
+            bsb_address=config['logger_bus_address'],
         ) 
         for disp_id, interval in config['loggers']
     ]
+    if config["cmd_interface_enable"]:
+        cmd_interface = CmdInterface(device, bsb_address=config['cmdline_bus_address'])
+    else:
+        cmd_interface = None
+    if config["web_interface_enable"]:
+        web_interface = WebInterface(
+            device=device, 
+            bsb_address=config['webinterface_bus_address'],
+            port=config["web_interface_port"], 
+            dashboard=config.get('web_dashboard', [])
+        ) 
+    else:
+        web_interface = None
     for trigger in config['triggers']:
         disp_id = trigger[0]
         for logger in loggers:
@@ -192,13 +188,9 @@ def run(config):
         config["adapter_settings"]["adapter_device"] = ":sim"
                 
     BsbGateway(
-        adapter_settings=config['adapter_settings'],
+        bsbcomm=bsbcomm,
         device=device,
-        bus_address=config['bus_address'],
         loggers=loggers,
-        atomic_interval=config['atomic_interval'],
-        web_interface_port=(config['web_interface_port'] if config['web_interface_enable'] else None),
-        web_dashboard=config.get('web_dashboard', []),
-        cmd_interface_enable=config['cmd_interface_enable'],
-        min_wait_s=config.get('min_wait_s', 0.1),
+        cmd_interface=cmd_interface,
+        web_interface=web_interface,
     ).run()
