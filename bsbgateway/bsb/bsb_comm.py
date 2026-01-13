@@ -240,6 +240,9 @@ def throttle_factory(min_wait_s = 0.1, max_pending_requests=MAX_PENDING_REQUESTS
                 stop.wait(wait_for)
 
     def do_throttled(action):
+        if todo.full():
+            _ = todo.get()
+            log().warning("Device request queue full. Dropping oldest message from outbox.")
         try:
             todo.put(action, timeout=0)
         except queue.Full as e:
