@@ -19,7 +19,7 @@
 ##############################################################################
 
 import logging
-log = lambda: logging.getLogger(__name__)
+import dataclasses as dc
 
 from contextlib import contextmanager
 import threading
@@ -34,7 +34,50 @@ from bsbgateway.hub.serial_source import SerialSource
 from .bsb_telegram import BsbTelegram
 from .bsb_field import ValidateError, EncodeError
 
+log = lambda: logging.getLogger(__name__)
+
 MAX_PENDING_REQUESTS = 50
+
+@dc.dataclass
+class AdapterSettings:
+    """Settings for the IO adapter used to connect to the BSB bus.
+    
+    Hardware settings are ignored when using simulation."""
+    adapter_device: str = "/dev/ttyUSB0"
+    """The device name of the serial adapter.
+
+    * '/dev/ttyS0' ... '/dev/ttyS3' are usual devices for real serial ports.
+    * '/dev/ttyUSB0' is the usual device for a USB-to-serial converter on Linux.
+    * ':sim' opens a simple device simulation (no actual serial port required)
+    """
+    port_baud: int = 4800
+    """Baudrate - typical value for BSB bus is 4800."""
+    port_stopbits: float = 1
+    """Stopbits - 1, 1.5 or 2. For BSB bus, use 1."""
+    port_parity: str = 'odd'
+    """Parity - 'none', 'odd' or 'even'. For BSB bus, use 'odd' if you invert bytes, "even" if not."""
+    invert_bytes: bool = True
+    """Invert all bits after receive + before send?
+    
+    If you use a simple BSB-to-UART level converter, you most probably need to
+    set this to True.
+    """
+    expect_cts_state: bool | None = None
+    """Only send if CTS has this state (True or False); None to disable.
+
+    Use this if your adapter has a "bus in use" detection wired to CTS pin of
+    the RS232 interface.
+    """
+    write_retry_time: float = 0.005
+    """Wait time in seconds if blocked by CTS (see above)."""
+    min_wait_s: float = 0.1
+    """Minimum wait time between subsequent data requests on the bus.
+
+    Used to avoid blocking up the bus when lots of requests come in at once. In case of contention, the oldest requests are dropped.
+
+    Note that the web interface has builtin timeout of 3.0 s. I.e. if you send
+    more than (3.0 / min_wait_s) requests at once, data will be lost.
+    """
 
 class BsbComm(EventSource):
     '''simplifies the conversion between serial data and BsbTelegrams.
@@ -47,21 +90,21 @@ class BsbComm(EventSource):
     bus_addresses = []
     _leftover_data = b''
     
-    def __init__(o, adapter_settings, device,  min_wait_s=0.1):
+    def __init__(o, adapter_settings:AdapterSettings, device):
         o.serial = SerialSource(
-            port_num=adapter_settings['adapter_device'],
+            port_num=adapter_settings.adapter_device,
             # use sane default values for the rest if not set
-            port_baud=adapter_settings.get('port_baud', 4800),
-            port_stopbits=adapter_settings.get('port_stopbits', 1),
-            port_parity=adapter_settings.get('port_parity', 'odd'),
+            port_baud=adapter_settings.port_baud,
+            port_stopbits=adapter_settings.port_stopbits,
+            port_parity=adapter_settings.port_parity,
             # Most simple RS232 level converters will deliver inverted bytes.
-            invert_bytes=adapter_settings.get('invert_bytes', True),
-            expect_cts_state=adapter_settings.get('expect_cts_state', None),
-            write_retry_time=adapter_settings.get('write_retry_time', 0.005),
+            invert_bytes=adapter_settings.invert_bytes,
+            expect_cts_state=adapter_settings.expect_cts_state,
+            write_retry_time=adapter_settings.write_retry_time,
         )
         o.device = device
         o._leftover_data = b''
-        o.min_wait_s = min_wait_s
+        o.min_wait_s = adapter_settings.min_wait_s
         o._do_throttled = None
         
     @event
@@ -177,7 +220,7 @@ def throttle_factory(min_wait_s = 0.1, max_pending_requests=MAX_PENDING_REQUESTS
     and stopped.
     """
     stop = threading.Event()
-    todo = queue.Queue(maxsize=max_pending_requests)
+    todo:queue.Queue = queue.Queue(maxsize=max_pending_requests)
 
     def runner():
         action = None

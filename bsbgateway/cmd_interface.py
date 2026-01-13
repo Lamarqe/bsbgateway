@@ -23,6 +23,7 @@
 import re
 import datetime
 import logging
+import dataclasses as dc
 
 from bsbgateway.bsb.bsb_telegram import BsbTelegram
 from bsbgateway.hub.event import event
@@ -31,6 +32,13 @@ from .hub.event_sources import EventSource, StdinSource
 from .bsb.bsb_field import ValidateError, EncodeError
 
 log = lambda: logging.getLogger(__name__)
+
+@dc.dataclass
+class CmdInterfaceConfig:
+    enable: bool = True
+    """Enable command line interface."""
+    bsb_address: int = 24
+    """Bus address of the command line interface module."""
 
 CMDS = [
     {
@@ -104,9 +112,9 @@ CMDS = [
 ]
 
 class CmdInterface(EventSource):
-    def __init__(o, device, bsb_address=24):
+    def __init__(o, config:CmdInterfaceConfig, device):
         o.device = device
-        o.bsb_address = bsb_address
+        o.bsb_address = config.bsb_address
         o.stdin_source = StdinSource()
         o.stdin_source.line += o.on_stdin_event
         # This is eval'd, so use text string.

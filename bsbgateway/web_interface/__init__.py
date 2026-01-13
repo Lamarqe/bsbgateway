@@ -26,6 +26,7 @@ from queue import Queue
 from bsbgateway.bsb.bsb_field import EncodeError, ValidateError
 from bsbgateway.hub.event_sources import EventSource
 from bsbgateway.hub.event import event
+from .config import WebInterfaceConfig
 from .index import Index
 from .field import Field
 from .group import Group
@@ -54,15 +55,15 @@ def print_handlers(urls):
     log().info('\n    '.join(s))
 
 class WebInterface(EventSource):
-    def __init__(o, device, port=8080, dashboard=None, bsb_address=25):
+    def __init__(o, config: WebInterfaceConfig, device):
         o.device = device
-        o.web2bsb = Web2Bsb(device, bsb_address=bsb_address)
+        o.web2bsb = Web2Bsb(device, bsb_address=config.bsb_address)
 
-        o.port = port
+        o.port = config.port
         dash_fields = []
         dash_breaks = []
         n = 0
-        for row in dashboard or []:
+        for row in config.web_dashboard or []:
             if not row:
                 continue
             dash_breaks.append(n)

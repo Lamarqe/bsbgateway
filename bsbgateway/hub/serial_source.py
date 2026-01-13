@@ -60,7 +60,7 @@ class SerialSource(EventSource):
     def __init__(o,
         port_num,
         port_baud,
-        port_stopbits=1,
+        port_stopbits:float=1,
         port_parity='none',
         invert_bytes = False,
         expect_cts_state = None,

@@ -1,4 +1,3 @@
-import pytest
 from bsbgateway.bsb.bsb_comm import throttle_factory
 
 import time

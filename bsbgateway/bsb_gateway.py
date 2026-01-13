@@ -27,22 +27,22 @@ import importlib
 import logging
 from queue import Queue
 import time
+import dataclasses as dc
 
 from .hub.event_sources import SyncedSecondTimerSource
 from .single_field_logger import SingleFieldLogger
 from .web_interface import WebInterface
 from .cmd_interface import CmdInterface
-from .email_action import make_email_action
 from .bsb.bsb_comm import BsbComm
+from . import config_reader
 
 log = lambda: logging.getLogger(__name__)
 
-
 class BsbGateway(object):
-    def __init__(o, bsbcomm, device, loggers, cmd_interface=None,web_interface=None):
+    def __init__(o, gateway_settings, bsbcomm, loggers, cmd_interface=None,web_interface=None):
         o._queue = Queue()
         o._running = False
-        o.device = device
+        o.device = gateway_settings.device
         """Device information object: contains field definitions etc."""
 
         # Modules
@@ -53,7 +53,6 @@ class BsbGateway(object):
         o.cmd_interface = cmd_interface
         
     def run(o):
-        log().info('BsbGateway (c) J. Loehnert 2013-2026, starting @%s'%time.time())
         o.setup_modules()
         o.run_eventloop()
 
@@ -138,59 +137,41 @@ class BsbGateway(object):
     def cmdline_set(o, disp_id, value, validate=True):
         o._bsbcomm.send_set(disp_id, value, 1, validate=validate)
 
-def run(config):
+def run(config:config_reader.Config):
     try:
-        device = importlib.import_module('.bsb.' + config['device'], __package__)
+        device = importlib.import_module('.bsb.' + config.gateway.device, __package__)
     except ModuleNotFoundError:
-        device = None
-    if not device:
         raise ValueError('Unsupported device')
     
-    emailaction = make_email_action(config['emailserver'], config['emailaddress'], config['emailcredentials'])
-
-    bsbcomm = BsbComm(config['adapter_settings'], device, min_wait_s=config.get('min_wait_s', 0.1))
+    bsbcomm = BsbComm(config.adapter, device)
     
-    if config['loggers']:
-        if not os.path.exists(config['tracefile_dir']):
-            log().info('Creating trace directory %s'%config['tracefile_dir'])
-            os.makedirs(config['tracefile_dir'])
-    loggers = [
-        SingleFieldLogger(
-            field=device.fields[disp_id],
-            interval=interval, 
-            atomic_interval=config['atomic_interval'],
-            filename=os.path.join(config['tracefile_dir'], '%d.trace'%disp_id),
-            bsb_address=config['logger_bus_address'],
-        ) 
-        for disp_id, interval in config['loggers']
-    ]
-    if config["cmd_interface_enable"]:
-        cmd_interface = CmdInterface(device, bsb_address=config['cmdline_bus_address'])
+    loggers = SingleFieldLogger.from_config(config.loggers, device)
+    if loggers:
+        if not os.path.exists(p:=config.loggers.tracefile_dir):
+            log().info(f'Creating trace directory {p}')
+            os.makedirs(p)
+
+    if config.cmd_interface.enable:
+        cmd_interface = CmdInterface(config.cmd_interface, device)
     else:
         cmd_interface = None
-    if config["web_interface_enable"]:
-        web_interface = WebInterface(
-            device=device, 
-            bsb_address=config['webinterface_bus_address'],
-            port=config["web_interface_port"], 
-            dashboard=config.get('web_dashboard', [])
-        ) 
+    if config.web_interface.enable:
+        web_interface = WebInterface(config.web_interface, device) 
     else:
         web_interface = None
-    for trigger in config['triggers']:
-        disp_id = trigger[0]
-        for logger in loggers:
-            if logger.field.disp_id == disp_id:
-                logger.add_trigger(emailaction, *trigger[1:])
-    # legacy config
-    tt = config["adapter_settings"].pop("adapter_type", "")
-    if tt == "fake":
-        config["adapter_settings"]["adapter_device"] = ":sim"
                 
     BsbGateway(
+        gateway_settings=config.gateway,
         bsbcomm=bsbcomm,
-        device=device,
         loggers=loggers,
         cmd_interface=cmd_interface,
         web_interface=web_interface,
     ).run()
+
+
+if __name__ == '__main__':
+    path, config = config_reader.load_config()
+    logging.basicConfig(level=config.gateway.loglevel)
+    log().info('BsbGateway (c) J. Loehnert 2013-2026, starting @%s'%time.time())
+    log().info("Using config file: %s", path)
+    run(config)

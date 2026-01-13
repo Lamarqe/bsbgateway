@@ -20,8 +20,25 @@
 
 import time
 import os
+import dataclasses as dc
 
 from bsbgateway.hub.event import event
+
+@dc.dataclass
+class LoggerConfig:
+    field_disp_ids: list[int] = dc.field(default_factory=lambda: [])
+    """List of field display IDs to log."""
+    intervals: list[int] = dc.field(default_factory=lambda: [])
+    """List of logging intervals (in seconds) for each field."""
+    tracefile_dir: str = 'traces'
+    """Directory to store trace files in."""
+    bsb_address: int = 23
+    """Bus address of the BSB device to log from."""
+
+    @property
+    def enable(o) -> bool:
+        """Whether logging is enabled (i.e., any fields are configured)."""
+        return len(o.field_disp_ids) > 0
 
 
 class SingleFieldLogger:
@@ -45,6 +62,24 @@ class SingleFieldLogger:
         if not os.path.exists(filename):
             o.log_fieldname()
         o.log_interval()
+
+    @classmethod
+    def from_config(cls, config:LoggerConfig, device) -> list['SingleFieldLogger']:
+        """Create loggers from configuration."""
+        loggers = []
+        for disp_id, interval in zip(config.field_disp_ids, config.intervals):
+            field = device.fields_by_disp_id.get(disp_id, None)
+            if not field:
+                raise ValueError(f'Field with display ID {disp_id} not found for device {device.__name__}')
+            logger = cls(
+                field=field,
+                interval=interval,
+                atomic_interval=1,
+                filename=os.path.join(config.tracefile_dir, f'{disp_id}.trace'),
+                bsb_address=config.bsb_address,
+            )
+            loggers.append(logger)
+        return loggers
     
     @event
     def send_get(disp_id:int, from_address:int): # type:ignore
