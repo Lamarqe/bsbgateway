@@ -1,4 +1,4 @@
 pyserial
 Flask
 attrs
-cattrs
+cattrs>=24.1.0

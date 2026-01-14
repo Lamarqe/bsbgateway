@@ -16,7 +16,7 @@ if [ ! -d "$VENV_DIR" ]; then
             exit 1
             ;;
     esac
-    echo "Creating environment '$VENV_DIR'..."
+    printf "\n*** Creating environment '$VENV_DIR'...\n"
     # Create virtual environment
     if command -v python3 >/dev/null 2>&1; then
         python3 -m venv "$VENV_DIR" || {
@@ -29,12 +29,17 @@ if [ ! -d "$VENV_DIR" ]; then
     fi
 
     # Install requirements if file exists
-    echo "Installing dependencies from '$REQ_FILE'..."
+    printf "\n*** Installing dependencies from '$REQ_FILE'...\n"
     "$PYTHON_BIN" -m pip install -r "$REQ_FILE" || {
         echo "Failed to install dependencies from '$REQ_FILE'."
         exit 1
     }
+    
+    printf "\n*** Installing bsbgateway in editable mode\n"
+    "$PYTHON_BIN" -m pip install -e .
+
+    printf "\n*** Starting BsbGateway\n"
 fi
 
 # Run the app
-exec "$PYTHON_BIN" -m bsbgateway "$@"
+$VENV_DIR/bin/bsbgateway
