@@ -2,8 +2,8 @@ import logging
 import dataclasses as dc
 import configparser as cp
 import json
+import os
 from pathlib import Path
-from typing import Any, Type
 
 from cattrs import Converter
 from cattrs.cols import is_sequence, list_structure_factory
@@ -29,10 +29,14 @@ class Config:
     loggers: LoggerConfig
     """Dataloggers"""
 
+def xdg_config_home() -> Path:
+    return Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+
 def load_config() -> tuple[Path|None, Config]:
     """Load configuration from default location.
     
     First tries to load from bsbgateway.ini in the current working directory,
+    then from $XDG_CONFIG_HOME/bsbgateway/bsbgateway.ini (var. usually expands to ~/config),
     then from /etc/bsbgateway/bsbgateway.ini.
 
     If no config file is found, default configuration is generated.
@@ -42,6 +46,7 @@ def load_config() -> tuple[Path|None, Config]:
     """
     config_paths = [
         Path.cwd() / 'bsbgateway.ini',
+        xdg_config_home() / 'bsbgateway/bsbgateway.ini',
         Path('/etc/bsbgateway/bsbgateway.ini'),
     ]
     
