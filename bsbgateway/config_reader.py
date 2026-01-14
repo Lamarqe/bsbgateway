@@ -4,6 +4,7 @@ import configparser as cp
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from cattrs import Converter
 from cattrs.cols import is_sequence, list_structure_factory
@@ -100,7 +101,7 @@ def _parse_config(parser: cp.ConfigParser) -> Config:
 
         return hook   
 
-    raw = {sec.lower(): dict(parser.items(sec)) for sec in parser.sections()}
+    raw:dict[str, dict[str, Any]] = {sec.lower(): dict(parser.items(sec)) for sec in parser.sections()}
     if "adapter" not in raw:
         raise ValueError("Missing required 'adapter' section in config")
     for section in ("loggers", "gateway"):
@@ -114,7 +115,7 @@ def _parse_config(parser: cp.ConfigParser) -> Config:
     if "expect_cts_state" in raw["adapter"]:
         val = raw["adapter"]["expect_cts_state"].lower()
         if val in ("", "null", "none"):
-            raw["adapter"]["expect_cts_state"] = None   
+            raw["adapter"]["expect_cts_state"] = None
     cfg = converter.structure(raw, Config)
     return cfg
 
