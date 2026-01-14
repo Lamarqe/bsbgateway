@@ -42,4 +42,4 @@ if [ ! -d "$VENV_DIR" ]; then
 fi
 
 # Run the app
-$VENV_DIR/bin/bsbgateway
+$VENV_DIR/bin/bsbgateway manage
