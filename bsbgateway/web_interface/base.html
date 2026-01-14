@@ -1,46 +1,23 @@
-$def with (body, title='')
-$code:
-    ##############################################################################
-    #
-    #    Part of BsbGateway
-    #    Copyright (C) Johannes Loehnert, 2013-2015
-    #
-    #    This program is free software: you can redistribute it and/or modify
-    #    it under the terms of the GNU Lesser General Public License as published by
-    #    the Free Software Foundation, either version 3 of the License, or
-    #    (at your option) any later version.
-    #
-    #    This program is distributed in the hope that it will be useful,
-    #    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    #    GNU Lesser General Public License for more details.
-    #
-    #    You should have received a copy of the GNU Lesser General Public License
-    #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-    #
-    ##############################################################################
-
-
-
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd"> 
+{#
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
+#}
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
 <html>
     <head>
-        <title>$(title + ' - ' if title else '')BSB-Web</title>
-        <!--<link rel="shortcut icon" href="static/favicon.ico?v=1" type="image/x-icon"/> -->
+        <title>{% if title %}{{ title }} - {% endif %}BSB-Web</title>
         <link rel="stylesheet" type="text/css" href="static/main.css" />
         <script type="text/javascript" src="static/jquery.js"></script>
         <script type="text/javascript" src="static/main.js"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
-
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
     </head>
     <body>
-    
-    $if title:
-        <h2><a href="/">BSB-Web</a></h2>
-        <h1>$title</h1>
-    $else:
-        <h1>BSB-Web</h1>
-
-$:body
+        {% if title %}
+            <h2><a href="/">BSB-Web</a></h2>
+            <h1>{{ title }}</h1>
+        {% else %}
+            <h1>BSB-Web</h1>
+        {% endif %}
+        {{ body|safe }}
     </body>
 </html>

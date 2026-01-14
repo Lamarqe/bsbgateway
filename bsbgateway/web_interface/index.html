@@ -1,42 +1,30 @@
-$def with (fields, groups, field_func, dash_breaks)
-$code:
-    ##############################################################################
-    #
-    #    Part of BsbGateway
-    #    Copyright (C) Johannes Loehnert, 2013-2015
-    #
-    #    This program is free software: you can redistribute it and/or modify
-    #    it under the terms of the GNU Lesser General Public License as published by
-    #    the Free Software Foundation, either version 3 of the License, or
-    #    (at your option) any later version.
-    #
-    #    This program is distributed in the hope that it will be useful,
-    #    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    #    GNU Lesser General Public License for more details.
-    #
-    #    You should have received a copy of the GNU Lesser General Public License
-    #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-    #
-    ##############################################################################
+{#
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
+#}
 
-$if fields:
+{% if fields %}
     <h2>Dashboard <button onclick="load_all();">Refresh</button></h2>
     <ul class="dashboard">
-    $for n, field in enumerate(fields):
-        $if n in dash_breaks:
+    {% for field in fields|list %}
+        {% if loop.index0 in dash_breaks %}
             </ul><ul class="dashboard">
-        $if field:
+        {% endif %}
+        {% if field %}
             <li>
-            $:field_func(field)
+            {% include 'field_dashwidget.html' %}
             </li>
-        $else:
+        {% else %}
             <li class="empty"></li>
+        {% endif %}
+    {% endfor %}
     </ul>
+{% endif %}
 
 <h2>Parameter Groups</h2>
 <ul>
-$for group in groups:
-    <li><a href='group-$(group.disp_id)'>#$group.name</a></li>
+{% for group in groups %}
+    <li><a href='group-{{ group.disp_id }}'>#{{ group.name }}</a></li>
+{% endfor %}
 </ul>
-<script>$$(document).ready(load_all);</script>
+<script>$(document).ready(load_all);</script>

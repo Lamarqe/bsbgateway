@@ -1,4 +1,4 @@
 pyserial
-web.py
+Flask
 attrs
 cattrs

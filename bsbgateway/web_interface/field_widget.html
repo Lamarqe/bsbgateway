@@ -1,57 +1,42 @@
-$def with (SELF, field, value)
-$code:
-    ##############################################################################
-    #
-    #    Part of BsbGateway
-    #    Copyright (C) Johannes Loehnert, 2013-2015
-    #
-    #    This program is free software: you can redistribute it and/or modify
-    #    it under the terms of the GNU Lesser General Public License as published by
-    #    the Free Software Foundation, either version 3 of the License, or
-    #    (at your option) any later version.
-    #
-    #    This program is distributed in the hope that it will be useful,
-    #    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    #    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    #    GNU Lesser General Public License for more details.
-    #
-    #    You should have received a copy of the GNU Lesser General Public License
-    #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-    #
-    ##############################################################################
+{#
+# SPDX-License-Identifier: MIT
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
+#}
 
-
-$if not field.rw:
-    <span class="fieldvalue">$SELF.fmt_rovalue(field, value)</span>
-$else:
-    <form class="fieldsetter" action="field-$(field.disp_id)" method="POST" onsubmit="return submit_field_$(field.type_name)(this);">
-        $if field.type_name == 'choice':
+{% if not field.rw %}
+    <span class="fieldvalue">{{ format_readonly_value(field, value) }}</span>
+{% else %}
+    <form class="fieldsetter" action="field-{{ field.disp_id }}" method="POST" onsubmit="return submit_field_{{ field.type_name }}(this);">
+        {% if field.type_name == 'choice' %}
             <select name="value">
-                $if field.nullable:
-                    <option value="" $('selected' if value is None else '')>--</option>
-                $ vkey = value[0] if value else ''
-                $ keys = [key for key in field.choices.keys()]
-                $ keys.sort()
-                $for key in keys:
-                    <option value="$(key)" $('selected' if key==vkey else '')>$key $field.choices[key]</option>
+                {% if field.nullable %}
+                    <option value="" {% if value is none %}selected{% endif %}>--</option>
+                {% endif %}
+                {% set vkey = value[0] if value else '' %}
+                {% set keys = field.choices.keys()|list %}
+                {% for key in keys|sort %}
+                    <option value="{{ key }}" {% if key == vkey %}selected{% endif %}>{{ key }} {{ field.choices[key] }}</option>
+                {% endfor %}
             </select>
-            
-        $elif field.type_name == 'time':
-            <input type="text" class="number" name="hour" value="$(value[0] if value else '--')"> :
-            <input type="text" class="number" name="minute" value="$(value[1] if value else '--')">
-            
-        $else:
-            <input type="text" class="number" name="value" value="$(value or '--')">$field.unit <span class="rangehint">$SELF.fmt_range(field)</span>
-            
+
+        {% elif field.type_name == 'time' %}
+            <input type="text" class="number" name="hour" value="{% if value %}{{ value[0] }}{% else %}--{% endif %}"> :
+            <input type="text" class="number" name="minute" value="{% if value %}{{ value[1] }}{% else %}--{% endif %}">
+
+        {% else %}
+            <input type="text" class="number" name="value" value="{% if value %}{{ value }}{% else %}--{% endif %}">{{ field.unit }} <span class="rangehint">{{ format_range(field) }}</span>
+
+        {% endif %}
         <input type="submit" value="Set">
     </form>
-    $if field.nullable:
-        $# Sending no value sets the NULL value.
+    {% if field.nullable %}
         <form
             class="fieldsetter"
-            action="field-$(field.disp_id)"
+            action="field-{{ field.disp_id }}"
             method="POST"
             onsubmit="submit_field_null(this);return false;"
         >
             <input type="submit" value="-- (reset)">
         </form>
+    {% endif %}
+{% endif %}
