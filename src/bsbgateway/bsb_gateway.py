@@ -26,8 +26,6 @@ import os
 import importlib
 import logging
 from queue import Queue
-import time
-import dataclasses as dc
 
 from .hub.event_sources import SyncedSecondTimerSource
 from .single_field_logger import SingleFieldLogger
@@ -167,11 +165,3 @@ def run(config:config_reader.Config):
         cmd_interface=cmd_interface,
         web_interface=web_interface,
     ).run()
-
-
-if __name__ == '__main__':
-    path, config = config_reader.load_config()
-    logging.basicConfig(level=config.gateway.loglevel)
-    log().info('BsbGateway (c) J. Loehnert 2013-2026, starting @%s'%time.time())
-    log().info("Using config file: %s", path)
-    run(config)
