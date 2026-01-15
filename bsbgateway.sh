@@ -3,12 +3,11 @@
 # Path to venv and python
 VENV_DIR=".venv"
 PYTHON_BIN="$VENV_DIR/bin/python3"
-REQ_FILE="requirements.txt"
 
 # If venv directory does not exist, offer to create it
 if [ ! -d "$VENV_DIR" ]; then
     echo "Virtual environment '$VENV_DIR' not found."
-    echo "Create it automatically and install from $REQ_FILE? [Y/n]: "
+    echo "Create it now? [Y/n]: "
     # shellcheck disable=SC2039  # 'read -r' is POSIX in most /bin/sh implementations
     read ans
     case "$ans" in
@@ -27,15 +26,9 @@ if [ ! -d "$VENV_DIR" ]; then
         echo "python3 not found in PATH."
         exit 1
     fi
-
-    # Install requirements if file exists
-    printf "\n*** Installing dependencies from '$REQ_FILE'...\n"
-    "$PYTHON_BIN" -m pip install -r "$REQ_FILE" || {
-        echo "Failed to install dependencies from '$REQ_FILE'."
-        exit 1
-    }
     
     printf "\n*** Installing bsbgateway in editable mode\n"
+    # .. this also installs all dependecies
     "$PYTHON_BIN" -m pip install -e .
 
     printf "\n*** Starting BsbGateway\n"

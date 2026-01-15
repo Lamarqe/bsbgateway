@@ -1,4 +1,0 @@
-pyserial
-Flask
-attrs
-cattrs>=24.1.0
