@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 from . import bsb_gateway
+from . import config_ui
 
 
 SERVICE_TEMPLATE = """[Unit]
@@ -83,20 +84,42 @@ def uninstall_service():
     """Uninstalls service"""
     sudo("sh", "-c", UNINSTALL_CMD)
 
-def cli_menu(config):
+def configure(config, config_path:Path|None):
+    """Interactive configuration of the BsbGateway config object."""
+    new_config, is_changed = config_ui.run(config)
+    if is_changed:
+        from .config_reader import save_config, xdg_config_home
+        if config_path:
+            L().info(f"Saving updated configuration to {config_path}")
+            save_config(new_config, config_path)
+        else:
+            config_dir = xdg_config_home() / "bsbgateway"
+            config_dir.mkdir(parents=True, exist_ok=True)
+            new_config_path = config_dir / "bsbgateway.ini"
+            L().info(f"Saving new configuration to {new_config_path}")
+            save_config(new_config, new_config_path)
+    else:
+        L().debug("No changes made to configuration.")
+    return new_config
+
+
+def cli_menu(config, config_path:Path|None):
     running = True
     while running:
-        print("""*** BsbGateway management menu ***
+        print("""\n=== BsbGateway management menu ===
 
-    r) Run BsbGateway within terminal
-    i) Install system service (requires root)
-    u) Uninstall system service (requires root)
+  c) Configure BsbGateway
+  r) Run BsbGateway within terminal
+  i) Install system service (requires root)
+  u) Uninstall system service (requires root)
 
-    q) Quit""")
+  x) Exit""")
         choice = input(">").lower()
         match choice:
-            case "q":
+            case "x":
                 running = False
+            case "c":
+                config = configure(config, config_path)
             case "r":
                 running = False
                 bsb_gateway.run(config)

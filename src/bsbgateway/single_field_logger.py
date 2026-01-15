@@ -27,11 +27,15 @@ from bsbgateway.hub.event import event
 @dc.dataclass
 class LoggerConfig:
     field_disp_ids: list[int] = dc.field(default_factory=lambda: [])
-    """List of field display IDs to log."""
+    """List of field display IDs (4-digit ids) to log."""
     intervals: list[int] = dc.field(default_factory=lambda: [])
     """List of logging intervals (in seconds) for each field."""
     tracefile_dir: str = 'traces'
-    """Directory to store trace files in."""
+    """Directory to store trace files in.
+    
+    If you run as system service, use an absolute path like
+    /var/log/bsbgateway/traces, and make sure that the user has write access.
+    """
     bsb_address: int = 23
     """Bus address of the BSB device to log from."""
 

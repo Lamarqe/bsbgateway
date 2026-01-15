@@ -17,7 +17,7 @@ def main():
                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     log().info("Using config file: %s", path)
     if sys.argv[1:] and sys.argv[1] == "manage":
-        cli_menu(config)
+        cli_menu(config, path)
     else:
         bsb_gateway.run(config)
 
