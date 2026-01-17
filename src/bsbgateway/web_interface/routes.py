@@ -8,9 +8,9 @@ from queue import Empty
 from flask import render_template, request, jsonify
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 
-from bsbgateway.bsb.bsb_field import BsbField, ValidateError
+from bsbgateway.bsb.model import BsbCommand, BsbDatatype
 from bsbgateway.web_interface import Web2Bsb
-from .utils import format_readonly_value, format_range
+from .utils import format_readonly_value, format_range, parse_value
 
 log = lambda: logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ log = lambda: logging.getLogger(__name__)
 def register_routes(
     app,
     web2bsb: "Web2Bsb",
-    dash_fields: list[BsbField] | None = None,
+    dash_fields: list[BsbCommand] | None = None,
     dash_breaks: list[int] | None = None,
 ):
     """Register all Flask routes with the app."""
@@ -40,15 +40,11 @@ def register_routes(
             log().error(f"error while requesting field {field_id}: {telegram}")
             raise InternalServerError(str(telegram))
 
-        data = telegram.data
-        if hasattr(data, "hour"):
-            data = (data.hour, data.minute)
-
         return {
             "disp_id": telegram.field.disp_id,
             "disp_name": telegram.field.disp_name,
             "timestamp": telegram.timestamp,
-            "data": data,
+            "data": telegram.data,
         }
 
     @app.route("/")
@@ -68,16 +64,13 @@ def register_routes(
             body=index_html,
         )
 
-    @app.route("/group-<int:group_id>")
+    @app.route("/group-<string:group_id>")
     def group(group_id):
         """Display a group of fields."""
-        groups = web2bsb.groups
-        matching_groups = [g for g in groups if g.disp_id == group_id]
-
-        if not matching_groups or len(matching_groups) != 1:
+        group_obj = web2bsb.groups.get(group_id, None)
+        if group_obj is None:
             raise NotFound()
 
-        group_obj = matching_groups[0]
         group_html = render_template(
             "group.html",
             group=group_obj,
@@ -113,6 +106,7 @@ def register_routes(
     def field_get_widget(field_id):
         field = web2bsb.fields[field_id]
         value_info = get_field_value(field_id)
+        print("value: ",value_info)
         return render_template(
             "field_widget.html",
             field=field,
@@ -136,32 +130,9 @@ def register_routes(
         """Handle POST requests to set a field value."""
         field = web2bsb.fields[field_id]
 
-        # Get form data
-        value_str = request.form.get("value", "").strip()
-        hour = request.form.get("hour", "").strip()
-        minute = request.form.get("minute", "").strip()
-
-        # Convert to appropriate type
-        try:
-            if field.type_name == "time":
-                if hour and minute:
-                    value = datetime.time(int(hour), int(minute))
-                else:
-                    value = None
-            elif field.type_name in ["int8", "choice"]:
-                value = int(value_str) if value_str else None
-            else:
-                value = float(value_str) if value_str else None
-        except (ValueError, TypeError) as e:
-            raise BadRequest(f"Invalid value: {e}")
-
-        # Validate
-        try:
-            field.validate(value)
-        except ValidateError as e:
-            raise BadRequest(f"Validation error: {e}")
-
-        # Set the value
+        # Raises BadRequest on failure.
+        # Note that value might be valid but still illegal (e.g. out of range).
+        value = parse_value(field, request.form)
         log().info(f"set field {field_id} to value {value!r}")
 
         try:

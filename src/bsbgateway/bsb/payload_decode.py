@@ -1,19 +1,28 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>import struct
+
 import struct
 import datetime as dt
-from .model import BsbType, BsbDatatype,ScheduleEntry
+from .model import BsbType, BsbDatatype, ScheduleEntry
 from .errors import DecodeError
 
 
-
-def decode(data:bytes, type:BsbType) -> object:
-    expect_len = min(type.payload_length+1, 22)
+def decode(data: bytes, type: BsbType, packettype="ret") -> object:
+    if type.datatype == BsbDatatype.Raw:
+        return data
+    expect_len = min(type.payload_length + 1, 22)
     if len(data) != expect_len:
-        raise DecodeError("Payload has wrong length. Expected %d bytes, got %d" % (type.payload_length+1, len(data)))
+        raise DecodeError(
+            "Payload has wrong length. Expected %d bytes, got %d"
+            % (type.payload_length + 1, len(data))
+        )
     if type.datatype not in (BsbDatatype.TimeProgram, BsbDatatype.String):
         # Flagged type
         flag = data[0]
         # Null value?
-        if flag != 0 and flag != 6:
+        if packettype == "ret" and flag != 0:
+            return None
+        if packettype == "set" and flag not in (1, 6):
             return None
         data = data[1:]
     if type.name in _CUSTOM_DECODERS:
@@ -24,39 +33,39 @@ def decode(data:bytes, type:BsbType) -> object:
         decoder = _DECODERS[type.datatype]
     return decoder(data, type)
 
+
 def decode_vals(data: bytes, type: BsbType):
     """Decodes numeric value.
     Returns int if type.factor=1, float if otherwise.
     """
     assert type.payload_length in [1, 2, 4]
-    code = {1:"b", 2:"h", 4:"i"}[type.payload_length]
+    code = {1: "b", 2: "h", 4: "i"}[type.payload_length]
     if type.unsigned or type.datatype != BsbDatatype.Vals:
         code = code.upper()
-    intval, = struct.unpack(">"+code, data)
+    (intval,) = struct.unpack(">" + code, data)
     if type.factor == 1:
         return intval
     else:
         return float(intval) / type.factor
-    
 
-def decode_hourminute(data:bytes, type:BsbType):
+
+def decode_hourminute(data: bytes, type: BsbType):
     assert type.payload_length == 2
     assert len(data) == 2
     hour, minute = struct.unpack("2b", data)
     return dt.time(hour, minute, 0)
 
 
-def decode_dt(data: bytes, type:BsbType):
-    year, month, day, dow, hour, minute, second, flag = (
-        struct.unpack("8b", data)
-    )
+def decode_dt(data: bytes, type: BsbType):
+    year, month, day, dow, hour, minute, second, flag = struct.unpack("8b", data)
     year = year + 1900
 
     def expect_flag(t):
         if flag != t:
             raise DecodeError("Datetime field: Expected subtype %d, got %d" % (t, flag))
+
     if type.name == "YEAR":
-        expect_flag(0x0f)
+        expect_flag(0x0F)
         return year
     elif type.name == "VACATIONPROG":
         expect_flag(0x17)
@@ -69,25 +78,28 @@ def decode_dt(data: bytes, type:BsbType):
         expect_flag(0x16)
         return dt.date(1900, month, day)
     elif type.datatype == BsbDatatype.Time:
-        expect_flag(0x1d)
+        expect_flag(0x1D)
         return dt.time(hour, minute, second)
     else:
         raise DecodeError("Could not decode datetime field")
 
-def decode_string(data:bytes, type:BsbType) -> str:
-    if b'\0' in data:
-        data = data[:data.index(b'\0')]
+
+def decode_string(data: bytes, type: BsbType) -> str:
+    if b"\0" in data:
+        data = data[: data.index(b"\0")]
     return data.decode("latin-1")
 
-def decode_enum(data:bytes, type:BsbType) -> int:
+
+def decode_enum(data: bytes, type: BsbType) -> int:
     """Returns the numeric value. Cannot convert to EnumValue without knowing
     the BsbCommand."""
     assert type.payload_length == 1
     assert len(data) == 1
-    val, = struct.unpack("B", data)
+    (val,) = struct.unpack("B", data)
     return val
 
-def decode_timeprogram(data:bytes, type:BsbType):
+
+def decode_timeprogram(data: bytes, type: BsbType):
     """Timeprogram is returned as list of up to three tuples (On, Off)"""
     assert len(data) == 12
     result = []
@@ -95,11 +107,8 @@ def decode_timeprogram(data:bytes, type:BsbType):
         if data[ofs] & 0x80 != 0:
             # disabled
             continue
-        h1, m1, h2, m2 = struct.unpack("4B", data[ofs:ofs+4])
-        result.append(ScheduleEntry(
-            on=dt.time(h1, m1, 0),
-            off=dt.time(h2, m2, 0)
-        ))
+        h1, m1, h2, m2 = struct.unpack("4B", data[ofs : ofs + 4])
+        result.append(ScheduleEntry(on=dt.time(h1, m1, 0), off=dt.time(h2, m2, 0)))
     return result
 
 
@@ -108,7 +117,7 @@ _DECODERS = {
     BsbDatatype.Bits: decode_vals,
     BsbDatatype.Enum: decode_enum,
     # PPS only. Not supported.
-    #BsbDatatype.Date: decode_date,
+    # BsbDatatype.Date: decode_date,
     BsbDatatype.Datetime: decode_dt,
     BsbDatatype.DayMonth: decode_dt,
     BsbDatatype.HourMinutes: decode_hourminute,
@@ -121,5 +130,5 @@ _DECODERS = {
 _CUSTOM_DECODERS = {
     "YEAR": decode_dt,
     # 702 Praesenztaste, 22 Bytes (?) Not supported
-    #"CUSTOM_ENUM": decode_custom_enum
+    # "CUSTOM_ENUM": decode_custom_enum
 }

@@ -6,7 +6,7 @@
 <button onclick="load_all();">Load all</button>
 
 <ul>
-{% for field in group.fields %}
+{% for field in group.commands %}
     <li class="fieldcontainer" id="fieldcontainer-{{ field.disp_id }}">
         {% include 'field.html' %}
     </li>

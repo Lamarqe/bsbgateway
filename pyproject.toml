@@ -36,6 +36,7 @@ packages = [
 
 # Include HTML templates and static files
 include = [
+    { path = "src/bsbgateway/bsb/*.json" },
     { path = "src/bsbgateway/web_interface/*.html" },
     { path = "src/bsbgateway/web_interface/static" },
 ]

@@ -6,22 +6,22 @@
 {% if not field.rw %}
     <span class="fieldvalue">{{ format_readonly_value(field, value) }}</span>
 {% else %}
-    <form class="fieldsetter" action="field-{{ field.disp_id }}" method="POST" onsubmit="return submit_field_{{ field.type_name }}(this);">
-        {% if field.type_name == 'choice' %}
+    <form class="fieldsetter" action="field-{{ field.disp_id }}" method="POST" onsubmit="return submit_field_{{ field.type.datatype.name }}(this);">
+        {% if field.type.datatype.name == "Enum" %}
             <select name="value">
-                {% if field.nullable %}
+                {% if field.type.nullable %}
                     <option value="" {% if value is none %}selected{% endif %}>--</option>
                 {% endif %}
-                {% set vkey = value[0] if value else '' %}
-                {% set keys = field.choices.keys()|list %}
+                {% set vkey = value if value else '' %}
+                {% set keys = field.enum.keys()|list %}
                 {% for key in keys|sort %}
-                    <option value="{{ key }}" {% if key == vkey %}selected{% endif %}>{{ key }} {{ field.choices[key] }}</option>
+                    <option value="{{ key }}" {% if key == vkey %}selected{% endif %}>{{ key }} {{ field.enum[key] }}</option>
                 {% endfor %}
             </select>
 
-        {% elif field.type_name == 'time' %}
-            <input type="text" class="number" name="hour" value="{% if value %}{{ value[0] }}{% else %}--{% endif %}"> :
-            <input type="text" class="number" name="minute" value="{% if value %}{{ value[1] }}{% else %}--{% endif %}">
+        {% elif field.type.datatype.name == 'HourMinutes' %}
+            <input type="text" class="number" name="hour" value="{% if value %}{{ value.hour }}{% else %}--{% endif %}"> :
+            <input type="text" class="number" name="minute" value="{% if value %}{{ value.minute }}{% else %}--{% endif %}">
 
         {% else %}
             <input type="text" class="number" name="value" value="{% if value %}{{ value }}{% else %}--{% endif %}">{{ field.unit }} <span class="rangehint">{{ format_range(field) }}</span>

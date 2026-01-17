@@ -24,7 +24,7 @@ log = lambda: logging.getLogger(__name__)
 import datetime
 import time
 
-from .bsb.bsb_telegram import BsbTelegram
+from .bsb.old_bsb_telegram import BsbTelegram
 from .bsb import broetje_isr_plus
 
 if sys.version_info[0] == 2:

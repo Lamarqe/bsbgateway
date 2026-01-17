@@ -141,10 +141,11 @@ def test_parse_device_description(testdata):
     cat = m.categories["2200"]
     assert (cat.name.de == "Kessel")
 
-#@pytest.mark.skip("Full json file not included in repo yet")
+@pytest.mark.skip("Full json file not included in repo yet")
 def test_parse_production_file():
     m = model.BsbModel.parse_file("bsb-parameter.json")
 
+@pytest.mark.skip("Full json file not included in repo yet")
 def test_dedup_types():
     m = model.BsbModel.parse_file("bsb-parameter.json")
     m = model.dedup_types(m)

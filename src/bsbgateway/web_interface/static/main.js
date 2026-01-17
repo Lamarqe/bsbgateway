@@ -11,19 +11,18 @@ function load_all() {
         );
     });
 }
-
 function submit_field_null(elem) {
     return submit_field(elem, {});
 }
 
-function submit_field_choice(elem) {
+function submit_field_Enum(elem) {
     return submit_field(
         elem,
         { value:$(elem).children('select[name="value"]').val() }
     );
 }
 
-function submit_field_time(elem) {
+function submit_field_HourMinutes(elem) {
     return submit_field(
         elem,
         { 
@@ -33,19 +32,7 @@ function submit_field_time(elem) {
     );
 }
 
-function submit_field_int8(elem) {
-    return submit_field(
-        elem,
-        { value:$(elem).children('input[name="value"]').val() }
-    );
-}
-function submit_field_int16(elem) {
-    return submit_field(
-        elem,
-        { value:$(elem).children('input[name="value"]').val() }
-    );
-}
-function submit_field_temperature(elem) {
+function submit_field_Vals(elem) {
     return submit_field(
         elem,
         { value:$(elem).children('input[name="value"]').val() }

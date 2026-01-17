@@ -55,7 +55,7 @@ def SE(h1, m1, h2, m2):
         ('010A', int8, None),
         ('020A', int8, None),
         ('050A', int8, None),
-        ('060A', int8, 10),
+        ('060A', int8, None), # 06 flag byte invalid for a return value
         ('00FE', bits, 254),
         ('00FE', enum, 254),
         ('000102', year, DecodeError),
@@ -89,8 +89,74 @@ def test_decode(data, bsb_type, expect):
     data = bytes.fromhex(data.replace(" ", ""))
     if isinstance(expect, type):
         with pytest.raises(expect):
-            _ = decode(data, bsb_type)
+            _ = decode(data, bsb_type, packettype="ret")
     else:
-        val = decode(data, bsb_type)
+        val = decode(data, bsb_type, packettype="ret")
         assert val == expect
         assert type(val) is type(expect)
+
+
+# ============ Raw type tests ============
+
+def test_decode_raw_simple_bytes():
+    """Test that Raw type decodes bytes unchanged."""
+    raw_type = BsbType.raw()
+    
+    test_bytes = b'\x01\x02\x03\x04'
+    decoded = decode(test_bytes, raw_type)
+    
+    assert decoded == test_bytes
+    assert decoded is test_bytes  # Should be the same object (no copy)
+
+
+def test_decode_raw_empty_bytes():
+    """Test that Raw type decodes empty bytes."""
+    raw_type = BsbType.raw()
+    
+    decoded = decode(b'', raw_type)
+    assert decoded == b''
+
+
+def test_decode_raw_long_bytes():
+    """Test that Raw type decodes long byte sequences without length restriction."""
+    raw_type = BsbType.raw()
+    
+    # Raw type should accept any length (up to available data)
+    # This bypasses the normal 22-byte protocol limit
+    test_bytes = bytes(range(100))
+    decoded = decode(test_bytes, raw_type)
+    
+    assert decoded == test_bytes
+    assert len(decoded) == 100
+
+
+def test_decode_raw_with_flag_byte_value():
+    """Test that Raw type doesn't interpret the first byte as a flag byte."""
+    raw_type = BsbType.raw()
+    
+    # These bytes would be interpreted as flag bytes in normal types
+    test_bytes = b'\x00\x01\x02\x03'  # 0x00 = value present in ret, would be null
+    
+    decoded = decode(test_bytes, raw_type)
+    
+    # Raw should return all bytes including what would normally be the flag byte
+    assert decoded == test_bytes
+    assert decoded[0] == 0x00
+
+
+def test_decode_raw_ignores_packettype():
+    """Test that Raw type doesn't interpret flag bytes based on packettype."""
+    raw_type = BsbType.raw()
+    
+    # Same bytes should decode identically regardless of packettype
+    test_bytes = b'\x00\x01\x02\x03'
+    
+    decoded_ret = decode(test_bytes, raw_type, packettype="ret")
+    decoded_set = decode(test_bytes, raw_type, packettype="set")
+    decoded_get = decode(test_bytes, raw_type, packettype="get")
+    
+    assert decoded_ret == test_bytes
+    assert decoded_set == test_bytes
+    assert decoded_get == test_bytes
+    assert decoded_ret == decoded_set == decoded_get
+

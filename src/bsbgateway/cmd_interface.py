@@ -1,24 +1,5 @@
-# -*- coding: utf8 -*-
-
-##############################################################################
-#
-#    Part of BsbGateway
-#    Copyright (C) Johannes Loehnert, 2013-2015
-#
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU Lesser General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU Lesser General Public License for more details.
-#
-#    You should have received a copy of the GNU Lesser General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-##############################################################################
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import re
 import datetime
@@ -26,6 +7,7 @@ import logging
 import dataclasses as dc
 
 from bsbgateway.bsb.bsb_telegram import BsbTelegram
+from bsbgateway.bsb.model import BsbCommand, BsbDatatype, BsbModel, ScheduleEntry
 from bsbgateway.hub.event import event
 
 from .hub.event_sources import EventSource, StdinSource
@@ -57,7 +39,7 @@ CMDS = [
         ''',
     }, {
         'cmd': 'set',
-        're': r's(et)?\s+(?P<disp_id>[0-9]+)\s(?P<value>[0-9.:-]+)\s*(?P<use_force>[!]?)',
+        're': r's(et)?\s+(?P<disp_id>[0-9]+)\s(?P<value>[T0-9.,;:-]+)\s*(?P<use_force>[!]?)',
         'help': '''set <field> <value>[!]- set value of field with ID <field>.
             field id = the value as seen on the standard LCD display.
             value = 
@@ -112,8 +94,8 @@ CMDS = [
 ]
 
 class CmdInterface(EventSource):
-    def __init__(o, config:CmdInterfaceConfig, device):
-        o.device = device
+    def __init__(o, config:CmdInterfaceConfig, device:BsbModel):
+        o.device:BsbModel = device
         o.bsb_address = config.bsb_address
         o.stdin_source = StdinSource()
         o.stdin_source.line += o.on_stdin_event
@@ -165,7 +147,7 @@ class CmdInterface(EventSource):
     def cmd_quit(o):
         o.quit()
                         
-    def cmd_get(o, disp_id):
+    def cmd_get(o, disp_id: int):
         disp_id = int(disp_id)
         try:
             o.send_get(disp_id, o.bsb_address)
@@ -173,30 +155,53 @@ class CmdInterface(EventSource):
             print(e.__class__.__name__ +': '+ str(e))
         
                         
-    def cmd_set(o, disp_id, value, use_force):
+    def cmd_set(o, disp_id: int, value, use_force: str):
         try:
             disp_id = int(disp_id)
-            field = o.device.fields[disp_id]
+            field:BsbCommand = o.device.fields[disp_id]
         except (TypeError, ValueError, KeyError):
             print('Unrecognized field.')
+            return
+        if field.type is None:
+            print('Field is missing its type definition.')
             return
         if value == '--':
             value = None
         else:
             try:
-                if field.type_name in ['choice', 'int8']:
-                    value = int(value)
-                elif field.type_name in ['int16', 'temperature', 'int32']:
-                    value = float(value)
-                elif field.type_name in ['time']:
-                    value = datetime.time(*map(int, value.split(':')))
-                else:
-                    raise TypeError('Data type for field %s %s is not defined.'%(field.disp_id, field.disp_name))
+                match field.type.datatype:
+                    case BsbDatatype.Vals:
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            value = float(value)
+                    case BsbDatatype.Enum | BsbDatatype.Bits:
+                        value = int(value)
+                    case BsbDatatype.String:
+                        value = str(value)
+                    case BsbDatatype.Datetime:
+                        value = datetime.datetime.strptime(value, '%Y-%m-%dT%H:%M:%S')
+                    case BsbDatatype.DayMonth:
+                        value = datetime.datetime.strptime(value, '%m-%d').date()
+                    case BsbDatatype.Time:
+                        value = datetime.datetime.strptime(value, '%H:%M:%S').time()
+                    case BsbDatatype.HourMinutes:
+                        value = datetime.datetime.strptime(value, '%H:%M').time()
+                    case BsbDatatype.TimeProgram:
+                        pairs = value.split(';')
+                        entries = []
+                        for p in pairs:
+                            t1, t2 = p.split('-')
+                            time1 = datetime.datetime.strptime(t1, '%H:%M').time()
+                            time2 = datetime.datetime.strptime(t2, '%H:%M').time()
+                            entries.append( ScheduleEntry(time1, time2) )
+                        value = entries
+                    case _:
+                        raise TypeError('Data type for command %s %s is not defined.'%(field.telegram_id, field.disp_name))
             except (TypeError, ValueError) as e:
                 print(e)
                 return
         try:
-            # TOOD: put as event
             validate=(use_force!='!')
             o.send_set(disp_id, value, o.bsb_address, validate)
         except (ValidateError, EncodeError) as e:
@@ -244,12 +249,12 @@ class CmdInterface(EventSource):
         text = text.lower()
         if not text: hash=True
         if hash:
-            grps = [grp
-                    for grp in o.device.groups
-                    if text in grp.name.lower()
+            grps = [category
+                    for category in o.device.categories.values()
+                    if text in category.name.de.lower()
             ]
         else:
-            grps = o.device.groups
+            grps = list(o.device.categories.values())
         if len(grps) == 0:
             print('Not found.')
             return
@@ -259,14 +264,14 @@ class CmdInterface(EventSource):
             
         for grp in grps:
             if not expand:
-                print('#'+grp.name)
+                print('#'+grp.name.de)
             else:
-                flds = grp.fields
+                flds = grp.commands
                 if text and not hash:
                     flds = [f for f in flds if text in f.disp_name.lower()]
-                flds.sort(key=lambda x: (x.disp_id, x.telegram_id))
+                flds.sort(key=lambda x: (x.parameter, x.telegram_id))
                 if flds:
-                    print('#'+grp.name+':')
+                    print('#'+grp.name.de+':')
                     for f in flds:
                         print('    '+f.short_description)
                     print()
@@ -279,7 +284,7 @@ class CmdInterface(EventSource):
         except KeyError:
             print('Not found.')
             return
-        ll.sort(key=lambda x: (x.disp_id, x.telegram_id))
+        ll.sort(key=lambda x: (x.parameter, x.telegram_id))
         for field in ll:
             print(field.long_description)
             print()
@@ -314,4 +319,4 @@ Commands: (every command can be abbreviated to just the first character)
             log().error('error applying filter: %r'%e)
             ff = False
         if telegram.dst==o.bsb_address or ff is True:
-            print(repr(telegram))
+            print(str(telegram))

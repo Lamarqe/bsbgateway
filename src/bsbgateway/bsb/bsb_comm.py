@@ -1,22 +1,5 @@
-##############################################################################
-#
-#    Part of BsbGateway
-#    Copyright (C) Johannes Loehnert, 2013-2015
-#
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU Lesser General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU Lesser General Public License for more details.
-#
-#    You should have received a copy of the GNU Lesser General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-##############################################################################
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import logging
 import dataclasses as dc
@@ -31,6 +14,7 @@ from bsbgateway.hub.event_sources import EventSource
 from bsbgateway.hub.event import event
 from bsbgateway.hub.serial_source import SerialSource
 
+from .model import BsbModel
 from .bsb_telegram import BsbTelegram
 from .errors import ValidateError, EncodeError
 
@@ -90,7 +74,7 @@ class BsbComm(EventSource):
     bus_addresses = []
     _leftover_data = b''
     
-    def __init__(o, adapter_settings:AdapterSettings, device):
+    def __init__(o, adapter_settings:AdapterSettings, device:BsbModel):
         o.serial = SerialSource(
             port_num=adapter_settings.adapter_device,
             # use sane default values for the rest if not set
@@ -102,7 +86,7 @@ class BsbComm(EventSource):
             expect_cts_state=adapter_settings.expect_cts_state,
             write_retry_time=adapter_settings.write_retry_time,
         )
-        o.device = device
+        o.device:BsbModel = device
         o._leftover_data = b''
         o.min_wait_s = adapter_settings.min_wait_s
         o._do_throttled = None
@@ -168,11 +152,12 @@ class BsbComm(EventSource):
         which_address: which busadress to use, default 0 (the first)'''
         if disp_id not in o.device.fields:
             raise EncodeError('unknown field')
-        t = BsbTelegram()
-        t.src = from_address
-        t.dst = 0
-        t.packettype = 'get'
-        t.field = o.device.fields[disp_id]
+        t = BsbTelegram(
+            command = o.device.fields[disp_id],
+            src = from_address,
+            dst = 0,
+            packettype = 'get'
+        )
         try:
             o._send_throttled(t.serialize())
         except (ValidateError, EncodeError, IOError) as e:
@@ -186,12 +171,13 @@ class BsbComm(EventSource):
         '''
         if disp_id not in o.device.fields:
             raise EncodeError('unknown field')
-        t = BsbTelegram()
-        t.src = from_address
-        t.dst = 0
-        t.packettype = 'set'
-        t.field = o.device.fields[disp_id]
-        t.data = value
+        t = BsbTelegram(
+            command = o.device.fields[disp_id],
+            src = from_address,
+            dst = 0,
+            packettype = 'set',
+            data = value
+        )
         # might throw ValidateError or EncodeError.
         try:
             data = t.serialize(validate=validate)

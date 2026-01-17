@@ -1,27 +1,11 @@
-##############################################################################
-#
-#    Part of BsbGateway
-#    Copyright (C) Johannes Loehnert, 2013-2015
-#
-#    This program is free software: you can redistribute it and/or modify
-#    it under the terms of the GNU Lesser General Public License as published by
-#    the Free Software Foundation, either version 3 of the License, or
-#    (at your option) any later version.
-#
-#    This program is distributed in the hope that it will be useful,
-#    but WITHOUT ANY WARRANTY; without even the implied warranty of
-#    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-#    GNU Lesser General Public License for more details.
-#
-#    You should have received a copy of the GNU Lesser General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-#
-##############################################################################
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import time
 import os
 import dataclasses as dc
 
+from bsbgateway.bsb.model import BsbCommand, BsbDatatype, BsbModel, BsbType
 from bsbgateway.hub.event import event
 
 @dc.dataclass
@@ -48,11 +32,11 @@ class LoggerConfig:
 class SingleFieldLogger:
     _last_save_time = 0
     _last_saved_value = None
-    _dtype = ''
+    _dtype:BsbType|None = None
     _last_was_value = False
     
-    def __init__(o, field, interval=1, atomic_interval=1, filename='', bsb_address=23):
-        o.field = field
+    def __init__(o, field:BsbCommand, interval=1, atomic_interval=1, filename='', bsb_address=23):
+        o.field:BsbCommand = field
         o.interval = interval
         o.atomic_interval = atomic_interval
         o.bsb_address = bsb_address
@@ -68,13 +52,13 @@ class SingleFieldLogger:
         o.log_interval()
 
     @classmethod
-    def from_config(cls, config:LoggerConfig, device) -> list['SingleFieldLogger']:
+    def from_config(cls, config:LoggerConfig, device:BsbModel) -> list['SingleFieldLogger']:
         """Create loggers from configuration."""
         loggers = []
         for disp_id, interval in zip(config.field_disp_ids, config.intervals):
-            field = device.fields_by_disp_id.get(disp_id, None)
+            field = device.fields.get(disp_id, None)
             if not field:
-                raise ValueError(f'Field with display ID {disp_id} not found for device {device.__name__}')
+                raise ValueError(f'Field with display ID {disp_id} not found for device {device.name}')
             logger = cls(
                 field=field,
                 interval=interval,
@@ -154,9 +138,11 @@ class SingleFieldLogger:
         if o._last_saved_value is not None and value == o._last_saved_value:
             o._log_append('~', False)
         else:
-            dtype = o.field.type_name
+            dtype = o.field.type
+            if dtype is None:
+                raise ValueError('Field %s has no type informtaion'%o.field.disp_name)
             if dtype != o._dtype:
-                o._log_append(':dtype %s'%dtype)
+                o._log_append(':dtype %s'%dtype.name)
                 o._dtype = dtype
             o._log_append('%s'%_serialize_value(value, dtype))
         o._last_saved_value = value
@@ -180,19 +166,31 @@ class SingleFieldLogger:
         fh.close()
         o._last_was_value = not (txt.startswith(':') or txt.startswith('\n:'))
         
-def _serialize_value(val, dtype):
+def _serialize_value(val, dtype:BsbType):
     if val is None:
         return '--'
-    if dtype == '':
+    datatype = dtype.datatype
+    if datatype == BsbDatatype.Raw:
         # unknown field type, save raw hex code
-        return ''.join(map(chr, val)).encode('hex')
-    elif dtype in ['int16', 'temperature', 'int32']:
+        return ' '.join('%02X'%b for b in val)
+    elif datatype in [
+        BsbDatatype.Vals,
+        BsbDatatype.Enum,
+        BsbDatatype.Bits,
+    ] or dtype.name.lower() == 'year':
         return '%g'%val
-    elif dtype == 'int8':
-        return '%g'%val
-    elif dtype == 'choice':
-        return '%g'%val[0]
-    elif dtype == 'time':
-        return '%02.0d:%02.0d'%(val.hour, val.minute)
+    elif datatype in [BsbDatatype.String]:
+        return str(val)
+    elif datatype == BsbDatatype.Datetime:
+        return val.strftime('%Y-%m-%d %H:%M:%S')
+    elif datatype == BsbDatatype.DayMonth:
+        return val.strftime('%d.%m.')
+    elif datatype == BsbDatatype.Time:
+        return val.strftime('%H:%M:%S')
+    elif datatype == BsbDatatype.HourMinutes:
+        return val.strftime('%H:%M')
     else:
+        # missing bsb types:
+        # TimeProgram
+        # Date
         raise ValueError('Cannot save values of type %s'%dtype)

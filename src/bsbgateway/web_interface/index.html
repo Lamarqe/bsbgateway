@@ -23,8 +23,8 @@
 
 <h2>Parameter Groups</h2>
 <ul>
-{% for group in groups %}
-    <li><a href='group-{{ group.disp_id }}'>#{{ group.name }}</a></li>
+{% for group_id, group in groups.items() %}
+    <li><a href='group-{{ group_id }}'>#{{ group.name }}</a></li>
 {% endfor %}
 </ul>
 <script>$(document).ready(load_all);</script>

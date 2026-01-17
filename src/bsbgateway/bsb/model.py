@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: LGPL-3.0-or-later
+# Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
+
 __all__ = [
     "BsbModel",
     "BsbCategory",
@@ -12,6 +15,8 @@ __all__ = [
     "dedup_types",
     "as_json",
 ]
+from functools import cached_property
+from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 import datetime as dt
 import attr
@@ -37,15 +42,24 @@ def as_json(thing, indent=2):
     ud = cattr.unstructure(thing)
     return json.dumps(ud, indent=indent, ensure_ascii=False)
 
+_TYPES_FILE = Path(__file__).with_name("bsb-types.json")
+
+def _load_default_types():
+    """Returns dictionary of default BsbTypes, keyed by typename."""
+    model = BsbModel.parse_file(str(_TYPES_FILE))
+    return model.types
+
 @attr.mutable
 class BsbModel:
     version: str
     "e.g. 2.1.0"
     compiletime: str
     """string YYYYMMDDHHMMSS"""
-    categories: Dict[str, "BsbCategory"] = {}
+    name: str = ""
+    """Human-readable name of device"""
+    categories: Dict[str, "BsbCategory"] = attr.Factory(dict)
     """Actual command entries by category"""
-    types: Dict[str, "BsbType"] = {}
+    types: Dict[str, "BsbType"] = attr.Factory(_load_default_types)
     """Known types"""
 
     @property
@@ -54,18 +68,49 @@ class BsbModel:
         for cat in self.categories.values():
             yield from cat.commands
 
+    @cached_property
+    def fields(self) -> dict[int, "BsbCommand"]:
+        """All commands by parameter number.
+        
+        Cached property!
+
+        "fields" for compatibility with older code.
+        """
+        return {cmd.parameter: cmd for cmd in self.commands}
+
+    @cached_property
+    def commands_by_telegram_id(self):
+        return {cmd.telegram_id: cmd for cmd in self.commands}
+    
     @classmethod
-    def parse_obj(cls, obj):
-        return cattr.structure(obj, cls)
+    def parse_obj(cls, obj, link_types=True):
+        model = cattr.structure(obj, cls)
+        if link_types:
+            model.link_types()
+        return model
 
     @classmethod
-    def parse_file(cls, filename):
+    def parse_file(cls, filename, link_types=True):
         with open(filename, "r") as f:
             ud = json.load(f)
-        return cls.parse_obj(ud)
+        ud.setdefault("name", Path(filename).stem)
+        return cls.parse_obj(ud, link_types=link_types)
 
     def json(self, indent=2):
         return as_json(self, indent=indent)
+
+    def link_types(self):
+        """Link command types from typename to actual type instance.
+
+        Modifies the model in-place.
+
+        If a command's typename is not found in the model's types,
+        raises KeyError.
+        """
+        for cmd in self.commands:
+            if cmd.typename:
+                cmd.type = self.types[cmd.typename]
+        return self
 
 @attr.mutable
 class BsbCategory:
@@ -107,7 +152,7 @@ class BsbCommand:
     """Possible values for an enum field, mapped to their description"""
 
     flags: List["BsbCommandFlags"] = attr.Factory(list)
-    """"""
+    """Command flags, see there."""
 
     min_value: Optional[float] = None
     """Minimum allowed set value"""
@@ -115,10 +160,87 @@ class BsbCommand:
     max_value: Optional[float] = None
     """Maximum allowed set value"""
 
+    @classmethod
+    def unknown(cls, telegram_id:int) -> "BsbCommand":
+        """Returns a placeholder command for unknown commands."""
+        return cls(
+            parameter=0,
+            command="0x%08X"%(telegram_id,),
+            description=I18nstr({"EN": "unknown command"}),
+            device=[],
+            typename="RAW",
+            type=BsbType.raw(),
+        )
+
     @property
     def uid(self):
         """unique command id, tuple"""
         return self.parameter, self.command.lower(), self.device[0].family, self.device[0].var
+
+    @property
+    def disp_id(self) -> int:
+        """Display ID (same as parameter)"""
+        return self.parameter
+    
+    @property
+    def disp_name(self) -> str:
+        """Display name (same as description)"""
+        return str(self.description)
+
+    @property
+    def unit(self) -> str:
+        """Unit string, if any"""
+        if self.type and self.type.unit:
+            return str(self.type.unit)
+        return ""
+
+    @property
+    def rw(self) -> bool:
+        """Is command writeable?"""
+        return BsbCommandFlags.Readonly not in self.flags
+
+    @property
+    def telegram_id(self) -> int:
+        """Telegram ID (command as number)"""
+        return int(self.command, 16)
+
+    @property
+    def short_description(o):
+        return u'''{fmrw}{o.parameter:04d} {o.command} {o.description.de}{fmunit}'''.format(
+            o=o,
+            fmunit=u' [%s]'%o.type.unit if o.type and o.type.unit else u'',
+            fmrw = u'*' if o.rw else u' ',
+        )
+    
+    @property
+    def long_description(o):
+        extra = []
+        if o.enum:
+            extra.append("Possible values:")
+            for key, val in o.enum.items():
+                extra.append(f"  {key}: {val!s}")
+        if o.min_value is not None or o.max_value is not None:
+            extra.append(f"Allowed range: {o.min_value} ... {o.max_value}")
+        if extra:
+            extra.insert(0, "")
+            extra = "\n".join(extra)
+        else:
+            extra = ""
+        return u'''{o.short_description}
+    {o.type_description}{fmnullable}. {extra}'''.format(
+        o=o,
+        fmnullable=u' or --' if o.type.nullable else u'',
+        extra = extra
+    )
+
+    @property
+    def type_description(o):
+        if not (type:=o.type):
+            return "Type: <unknown>"
+        desc = u'Type: %s (%s), %d bytes' % (type.name, type.datatype.value, type.payload_length)
+        if type.datatype == BsbDatatype.Vals:
+            desc += u', factor %d' % type.factor
+        return desc
 
 class BsbCommandFlags(Enum):
     """Command flags.
@@ -183,20 +305,56 @@ class BsbType:
     def nullable(self):
         return (self.enable_byte == 6)
 
+    @classmethod
+    def raw(cls) -> "BsbType":
+        """Returns a placeholder type for unknown types."""
+        return cls(
+            unit=I18nstr({"EN": ""}),
+            name="RAW",
+            datatype=BsbDatatype.Raw,
+            payload_length=0,
+        )
+
 
 class BsbDatatype(Enum):
     Vals = "VALS"
-    """Int with scaling factor"""
+    """Int with scaling factor. 
+    Maps to float if factor != 1, else int."""
     Enum = "ENUM"
+    """Enum value. Maps to int (0..255)"""
     Bits = "BITS"
+    """Bitfield value. Maps to int (0..255)"""
     String = "STRN"
+    """Text value."""
     Datetime = "DTTM"
+    """Full datetime value.
+    
+    Maps to datetime.datetime."""
     DayMonth = "DDMM"
+    """Day and month value.
+    
+    Maps to datetime.date with year 1900."""
     Time = "THMS"
+    """hour/minutes/seconds value.
+    Maps to datetime.time.
+    """
     HourMinutes = "HHMM"
+    """hour/minutes value.
+    
+    Maps to datetime.time with seconds=0.
+    """
     TimeProgram = "TMPR"
+    """Time program (on/off schedule).
+
+    Maps to list of ScheduleEntry. Each schedule entry has .on and .off properties of type datetime.time; seconds = 0 .
+    """
     # FIXME : ???
     Date = "DWHM"
+    """Date value.
+
+    Not supported yet."""
+    Raw = "RAW"
+    """Raw binary data. Default if we don't know a field."""
 
 
 @attr.mutable

@@ -8,6 +8,8 @@ from queue import Queue
 from flask import Flask
 from werkzeug.serving import make_server
 
+from bsbgateway.bsb.model import BsbCategory, BsbCommand, BsbModel
+from bsbgateway.bsb.bsb_telegram import BsbTelegram
 from bsbgateway.hub.event_sources import EventSource
 from bsbgateway.hub.event import event
 from .config import WebInterfaceConfig
@@ -18,7 +20,7 @@ log = lambda: logging.getLogger(__name__)
 class WebInterface(EventSource):
     """Web interface for BSB Gateway using Flask."""
 
-    def __init__(self, config: WebInterfaceConfig, device):
+    def __init__(self, config: WebInterfaceConfig, device:BsbModel):
         self.device = device
         self.web2bsb = Web2Bsb(device, bsb_address=config.bsb_address)
         self.port = config.port
@@ -34,7 +36,7 @@ class WebInterface(EventSource):
             for disp_id in row:
                 n += 1
                 dash_fields.append(
-                    device.fields_by_disp_id[disp_id] if disp_id else None
+                    device.fields.get(disp_id, None) if disp_id else None
                 )
 
         self.dash_fields = dash_fields
@@ -71,21 +73,21 @@ class WebInterface(EventSource):
 class Web2Bsb:
     """Bridge between web interface and BSB backend."""
 
-    def __init__(self, device, bsb_address=25):
-        self.device = device
+    def __init__(self, device:BsbModel, bsb_address=25):
+        self.device:BsbModel = device
         self.bsb_address = bsb_address
         self.pending_web_requests = []
 
     @property
-    def fields(self):
+    def fields(self) -> dict[int, "BsbCommand"]:
         return self.device.fields
 
     @property
-    def groups(self):
-        return self.device.groups
+    def groups(self) -> dict[str, BsbCategory]:
+        return self.device.categories
 
     @event
-    def send_get(disp_id: str, from_address: int):  # type:ignore
+    def send_get(disp_id: int, from_address: int):  # type:ignore
         """Request to get a field value from BSB device.
 
         Args:
@@ -94,7 +96,7 @@ class Web2Bsb:
         """
 
     @event
-    def send_set(disp_id: str, value, from_address: int, validate: bool):  # type:ignore
+    def send_set(disp_id: int, value, from_address: int, validate: bool):  # type:ignore
         """Request to set a field value on BSB device.
 
         Args:
@@ -127,7 +129,7 @@ class Web2Bsb:
         else:
             raise ValueError("unsupported action")
 
-    def on_bsb_telegrams(self, telegrams):
+    def on_bsb_telegrams(self, telegrams:list[BsbTelegram]):
         """Handle incoming BSB telegrams."""
         for telegram in telegrams:
             if telegram.dst == self.bsb_address and telegram.packettype in [
