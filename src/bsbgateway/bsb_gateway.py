@@ -117,10 +117,6 @@ class BsbGateway(object):
         o._bsbcomm.send_set(disp_id, value, 1, validate=validate)
 
 def run(config:config_reader.Config):
-    try:
-        device = importlib.import_module('.bsb.' + config.gateway.device, __package__)
-    except ModuleNotFoundError:
-        raise ValueError('Unsupported device')
     model_path = config.gateway.device + ".json"
     log().info(f'Loading device information from {model_path}')
     model = BsbModel.parse_file(config.gateway.device + ".json")
