@@ -80,12 +80,18 @@ def encode(data:object, bsb_type:BsbType, command:BsbCommand, validate:bool=True
         payload = b'\x00' * bsb_type.payload_length
     
     # Add flag byte for flagged types (not for TimeProgram and String)
-    if bsb_type.datatype not in (BsbDatatype.TimeProgram, BsbDatatype.String):
+    if bsb_type.datatype not in (BsbDatatype.TimeProgram, BsbDatatype.String, BsbDatatype.Raw):
         return bytes([flag]) + payload
     else:
         # TimeProgram and String don't have flag bytes
         return payload
 
+def encode_unsure(data: object, bsb_type:BsbType) -> bytes:
+    """I'm not sure how to correctly encode this field.
+    
+    Will always raise an EncodeError.
+    """
+    raise EncodeError(f"Not sure about type {bsb_type.name} - won't encode for safety reasons.")
 
 def encode_vals(data:object, bsb_type:BsbType) -> bytes:
     """Encodes numeric value (int or float).
@@ -241,7 +247,7 @@ def encode_timeprogram(data:object, bsb_type:BsbType) -> bytes:
 
 _ENCODERS = {
     BsbDatatype.Vals: encode_vals,
-    BsbDatatype.Bits: encode_vals,
+    BsbDatatype.Bits: encode_unsure,
     BsbDatatype.Enum: encode_enum,
     BsbDatatype.Datetime: encode_dt,
     BsbDatatype.DayMonth: encode_dt,
@@ -249,6 +255,7 @@ _ENCODERS = {
     BsbDatatype.Time: encode_dt,
     BsbDatatype.TimeProgram: encode_timeprogram,
     BsbDatatype.String: encode_string,
+    BsbDatatype.Date: encode_unsure,
 }
 
 # Exceptions :-)

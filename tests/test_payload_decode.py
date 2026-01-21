@@ -56,7 +56,7 @@ def SE(h1, m1, h2, m2):
         ('020A', int8, None),
         ('050A', int8, None),
         ('060A', int8, None), # 06 flag byte invalid for a return value
-        ('00FE', bits, 254),
+        ('00FE', bits, b"\xFE"),
         ('00FE', enum, 254),
         ('000102', year, DecodeError),
         (dtval + '0F', year, 1985),

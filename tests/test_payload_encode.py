@@ -69,7 +69,6 @@ def make_command(**kwargs):
         (65535, uint16),
         (26.0, int16_10),
         (65536, int32),
-        (254, bits),
         (254, enum),
         (1985, year),
         (dt.datetime(1985, 10, 26, 1, 21, 1), dttm),
@@ -97,7 +96,7 @@ def test_encode_decode_roundtrip(value, bsb_type):
     encoded = encode(value, bsb_type, cmd, validate=False, packettype="ret")
     
     # Check flag byte for ret packets: 0 for value, 1 for null
-    if bsb_type.datatype not in (BsbDatatype.TimeProgram, BsbDatatype.String):
+    if bsb_type.datatype not in (BsbDatatype.TimeProgram, BsbDatatype.String, BsbDatatype.Raw):
         expected_flag = 1 if value is None else 0
         assert encoded[0] == expected_flag, f"Wrong flag for {value}, got {encoded[0]}, expected {expected_flag}"
     
@@ -109,6 +108,17 @@ def test_encode_decode_roundtrip(value, bsb_type):
     encoded = encode(value, bsb_type, cmd, validate=False, packettype="set")
     decoded = decode(encoded, bsb_type, packettype="set")
     assert decoded == value, f"Decoded {decoded} != {value} (set packet)"
+
+@pytest.mark.parametrize(
+    "value, bsb_type",
+    [
+        (b'abc', bits),
+    ]
+)
+def test_encode_unsure(value, bsb_type):
+    cmd = make_command()
+    with pytest.raises(EncodeError):
+        _ = encode(value, bsb_type, cmd, packettype="set")
 
 
 def test_encode_validation():

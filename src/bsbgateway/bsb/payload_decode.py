@@ -16,7 +16,7 @@ def decode(data: bytes, type: BsbType, packettype="ret") -> object:
             "Payload has wrong length. Expected %d bytes, got %d"
             % (type.payload_length + 1, len(data))
         )
-    if type.datatype not in (BsbDatatype.TimeProgram, BsbDatatype.String):
+    if type.datatype not in (BsbDatatype.TimeProgram, BsbDatatype.String, BsbDatatype.Raw):
         # Flagged type
         flag = data[0]
         # Null value?
@@ -47,6 +47,13 @@ def decode_vals(data: bytes, type: BsbType):
         return intval
     else:
         return float(intval) / type.factor
+
+def decode_bits(data:bytes, type:BsbType):
+    """Decodes bitfield value.
+
+    Returns payload data as-is.
+    """
+    return data
 
 
 def decode_hourminute(data: bytes, type: BsbType):
@@ -114,7 +121,7 @@ def decode_timeprogram(data: bytes, type: BsbType):
 
 _DECODERS = {
     BsbDatatype.Vals: decode_vals,
-    BsbDatatype.Bits: decode_vals,
+    BsbDatatype.Bits: decode_bits,
     BsbDatatype.Enum: decode_enum,
     # PPS only. Not supported.
     # BsbDatatype.Date: decode_date,
