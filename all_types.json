@@ -1,0 +1,150 @@
+{
+  "version": "2.1.0",
+  "compiletime": "20230122120735",
+  "categories": {
+    "100": {
+      "name": { "EN": "100 Everything" },
+      "min": 100,
+      "max": 9999,
+      "commands": [
+        {
+          "parameter": 100,
+          "command": "0xB5B00000",
+          "description": { "EN": "Datetime field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "DATETIME"
+        },
+        {
+          "parameter": 101,
+          "command": "0xB5B00001",
+          "description": { "EN": "Time field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "TIME"
+        },
+        {
+          "parameter": 102,
+          "command": "0xB5B00002",
+          "description": { "EN": "DayMonth field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "DAYMONTH"
+        },
+        {
+          "parameter": 103,
+          "command": "0xB5B00003",
+          "description": { "EN": "Year field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "YEAR"
+        },
+        {
+          "parameter": 104,
+          "command": "0xB5B00004",
+          "description": { "EN": "HourMinutes nullable field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "HOUR_MINUTES"
+        },
+        {
+          "parameter": 105,
+          "command": "0xB5B00005",
+          "description": { "EN": "TimeProgram field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "TIMEPROG"
+        },
+        {
+          "parameter": 106,
+          "command": "0xB5B00006",
+          "description": { "EN": "String field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "STRING"
+        },
+        {
+          "parameter": 107,
+          "command": "0xB5B00007",
+          "description": { "EN": "Enum field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "enum": {
+            "0": { "EN": "Option A" },
+            "1": { "EN": "Option B" },
+            "2": { "EN": "Option C" }
+          },
+          "typename": "ENUM"
+        },
+        {
+          "parameter": 108,
+          "command": "0xB5B00008",
+          "description": { "EN": "Temperature field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "TEMP"
+        },
+        {
+          "parameter": 109,
+          "command": "0xB5B00009",
+          "description": { "EN": "16bit-int nullable field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "HOURS_WORD"
+        },
+        {
+          "parameter": 110,
+          "command": "0xB5B0000A",
+          "description": { "EN": "Bits field" },
+          "device": [
+            {
+              "family": 255,
+              "var": 255
+            }
+          ],
+          "typename": "CUSTOM_BIT"
+        }
+      ]
+    }
+  }
+}

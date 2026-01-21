@@ -155,7 +155,8 @@ class BsbTelegram(object):
             # Try to identify the field. if not found, keep the "null" field.
             t.field = device.fields_by_telegram_id.get(fieldid, t.field)
         # Expects list of ints
-        t.rawdata = [x for x in idata[9:dlen-2]]
+        #t.rawdata = [x for x in idata[9:dlen-2]]
+        t.rawdata = idata[9:dlen-2]
         if t.rawdata:
             t.data = t.field.decode(t.rawdata)
         else:

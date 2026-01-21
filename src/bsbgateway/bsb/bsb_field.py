@@ -57,6 +57,8 @@ class BsbField(object):
         '''turns the python value in data into bytes for sending.
         Must check that the data can be turned into valid bytes and raise EncodeError on fail.
         Flag is the first byte and depends on packettype and whether field is nullable.'''
+        if isinstance(data, bytes):
+            return data
         raise EncodeError('Field %s: Unknown field type, value cannot be encoded.'%o.disp_id)
     
     def _validate_data(o, data):
