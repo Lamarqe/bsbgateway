@@ -12,7 +12,7 @@ function load_all() {
     });
 }
 function submit_field_null(elem) {
-    return submit_field(elem, {});
+    return submit_field(elem, { set_null:1});
 }
 
 function submit_field_Enum(elem) {
@@ -22,15 +22,24 @@ function submit_field_Enum(elem) {
     );
 }
 
-function submit_field_HourMinutes(elem) {
+function submit_field_anydate(elem) {
     return submit_field(
         elem,
         { 
+            year:$(elem).children('input[name="year"]').val(),
+            month:$(elem).children('input[name="month"]').val(),
+            day:$(elem).children('input[name="day"]').val(),
             hour:$(elem).children('input[name="hour"]').val(),   
-            minute:$(elem).children('input[name="minute"]').val()   
+            minute:$(elem).children('input[name="minute"]').val(),
+            second:$(elem).children('input[name="second"]').val()
         }
     );
 }
+
+submit_field_Datetime = submit_field_anydate;
+submit_field_DayMonth = submit_field_anydate;
+submit_field_Time = submit_field_anydate;
+submit_field_HourMinutes = submit_field_anydate;
 
 function submit_field_Vals(elem) {
     return submit_field(
@@ -38,6 +47,9 @@ function submit_field_Vals(elem) {
         { value:$(elem).children('input[name="value"]').val() }
     );
 }
+
+submit_field_TimeProgram = submit_field_Vals;
+submit_field_String = submit_field_Vals;
 
 function submit_field(elem, data) {
     var url = $(elem).attr('action');

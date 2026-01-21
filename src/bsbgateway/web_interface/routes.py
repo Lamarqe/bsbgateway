@@ -14,6 +14,12 @@ from .utils import format_readonly_value, format_range, parse_value
 
 log = lambda: logging.getLogger(__name__)
 
+DATETIME_CTL_MAP = {
+    BsbDatatype.Datetime: ["year", "-", "month", "-", "day", " ", "hour", ":", "minute", ":", "second"],
+    BsbDatatype.DayMonth: ["day", ".", "month", "."],
+    BsbDatatype.Time: ["hour", ":", "minute", ":", "second"],
+    BsbDatatype.HourMinutes: ["hour", ":", "minute"],
+}
 
 def register_routes(
     app,
@@ -106,13 +112,13 @@ def register_routes(
     def field_get_widget(field_id):
         field = web2bsb.fields[field_id]
         value_info = get_field_value(field_id)
-        print("value: ",value_info)
         return render_template(
             "field_widget.html",
             field=field,
             value=value_info["data"],
             format_readonly_value=format_readonly_value,
             format_range=format_range,
+            datetime_ctl_map = DATETIME_CTL_MAP
         )
 
     @app.route("/field-<int:field_id>.dashwidget", methods=["GET"])

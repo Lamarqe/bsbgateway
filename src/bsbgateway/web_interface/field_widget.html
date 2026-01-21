@@ -19,17 +19,31 @@
                 {% endfor %}
             </select>
 
-        {% elif field.type.datatype.name == 'HourMinutes' %}
-            <input type="text" class="number" name="hour" value="{% if value %}{{ value.hour }}{% else %}--{% endif %}"> :
-            <input type="text" class="number" name="minute" value="{% if value %}{{ value.minute }}{% else %}--{% endif %}">
+        {# datetime types #}
+        {% elif field.type.datatype.name in ("Datetime", "DayMonth", "Time", "HourMinutes") %}
+            {% for name in datetime_ctl_map[field.type.datatype] %}
+                {% if name in "-.: " %}
+                    {{ name }}
+                {% else %}
+                    <input type="text" class="number" name="{{ name }}" value="{% if value %}{{ value[name] }}{% else %}0{% endif %}">
+                {% endif %}
+            {% endfor %}
 
+        {% elif field.type.datatype.name == "TimeProgram" %}
+            <input type="text" name="value" value="
+                {%- for entry in value -%}
+{{ entry.on.strftime("%H:%M") }}-{{ entry.off.strftime("%H:%M") }}{% if not loop.last %},{% endif %}
+                {%- endfor -%}
+            ">
+        {% elif field.type.datatype.name == "String" %}
+            <input type="text" name="value" value="{{ value }}">
         {% else %}
             <input type="text" class="number" name="value" value="{% if value %}{{ value }}{% else %}--{% endif %}">{{ field.unit }} <span class="rangehint">{{ format_range(field) }}</span>
 
         {% endif %}
         <input type="submit" value="Set">
     </form>
-    {% if field.nullable %}
+    {% if field.type.nullable %}
         <form
             class="fieldsetter"
             action="field-{{ field.disp_id }}"
