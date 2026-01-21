@@ -24,7 +24,8 @@ import queue
 import serial
 from serial import Serial
 
-from bsbgateway.hub.event import event
+from .adapter_settings import AdapterSettings
+from .event import event
 
 from ..virtual_serial import VirtualSerial
 from ..virtual_device import virtual_device
@@ -90,8 +91,22 @@ class SerialSource(EventSource):
             timeout=1.0,
         )
 
+    @classmethod
+    def from_adapter_settings(o, settings:AdapterSettings):
+        return o(
+            port_num=settings.adapter_device,
+            # use sane default values for the rest if not set
+            port_baud=settings.port_baud,
+            port_stopbits=settings.port_stopbits,
+            port_parity=settings.port_parity,
+            # Most simple RS232 level converters will deliver inverted bytes.
+            invert_bytes=settings.invert_bytes,
+            expect_cts_state=settings.expect_cts_state,
+            write_retry_time=settings.write_retry_time,
+        )
+
     @event
-    def data(timestamp:float, data:bytes): # type:ignore
+    def rx_bytes(data:bytes): # type:ignore
         """Data received from the serial port.
         
         Payload is a bytes object.
@@ -122,16 +137,15 @@ class SerialSource(EventSource):
                 break
 
             if len(data) > 0:
-                timestamp = time.time()
                 if o._invert_bytes:
                     data = bytearray(data)
                     for i in range(len(data)):
                         data[i] ^= 0xff
                     data = bytes(data)
-                o.data(timestamp, data)
+                o.rx_bytes(data)
         o.serial_port.close()
 
-    def write(o, data):
+    def tx_bytes(o, data:bytes):
         if o._invert_bytes:
             data = bytearray(data)
             for i in range(len(data)):

@@ -8,6 +8,7 @@ import logging
 from queue import Queue
 
 from bsbgateway.bsb.model_merge import merge
+from bsbgateway.hub.serial_source import SerialSource
 
 from .hub.event_sources import SyncedSecondTimerSource
 from .single_field_logger import SingleFieldLogger
@@ -20,12 +21,27 @@ from . import config_reader
 log = lambda: logging.getLogger(__name__)
 
 class BsbGateway(object):
-    def __init__(o, bsbcomm, loggers, cmd_interface=None,web_interface=None):
+    """Main class, provides event routing between the modules.
+
+    * adapter: The IO adapter, providing rx_bytes and tx_bytes
+    * bsbcomm: (de)serialization of bytes messages.
+        * turns rx_bytes into bsb_telegrams events
+        * turns send_get/send_set into tx_bytes calls
+    * loggers: list of dataloggers
+    * cmd_interface: command line interface
+    * web_interface: web interface
+
+    The latter three modules are optional. Each of them can send
+    get/set requests, and receives bsb_telegrams and send_error events.
+
+    """
+    def __init__(o, adapter, bsbcomm, loggers, cmd_interface=None,web_interface=None):
         o._queue = Queue()
         o._running = False
 
         # Modules
         o._timer = SyncedSecondTimerSource()
+        o._adapter = adapter
         o._bsbcomm = bsbcomm
         o.loggers = loggers
         o.web_interface = web_interface
@@ -34,7 +50,7 @@ class BsbGateway(object):
     def run(o):
         o.setup_modules()
         o.run_eventloop()
-
+        # TODO: Clean shutdown of modules
 
     def setup_modules(o):
         def _marshal(handler):
@@ -47,9 +63,15 @@ class BsbGateway(object):
         o._timer.tick += _marshal(o.on_timer_tick)
         o._timer.start_thread()
 
+        # Adapter <-> BSB Comm
+        o._adapter.rx_bytes += _marshal(o._bsbcomm.rx_bytes)
+        o._bsbcomm.tx_bytes += _marshal(o._adapter.tx_bytes)
+        o._adapter.start_thread()
+
         # BSB Comm
         o._bsbcomm.bsb_telegrams += _marshal(o.on_bsb_telegrams)
         o._bsbcomm.send_error += _marshal(o.on_send_error)
+        # BSB Comm manages the throttle thread, thus we need to start it here
         o._bsbcomm.start_thread()
         
         if o.cmd_interface:
@@ -91,6 +113,7 @@ class BsbGateway(object):
             logger.tick()
 
     def on_bsb_telegrams(o, telegrams):
+        """Distribute to consumer modules"""
         if o.cmd_interface:
             o.cmd_interface.on_bsb_telegrams(telegrams)
         if o.web_interface:
@@ -99,6 +122,7 @@ class BsbGateway(object):
             logger.on_bsb_telegrams(telegrams)
 
     def on_send_error(o, error: Exception, disp_id: int, from_address: int):
+        """Distribute to consumer modules"""
         if o.cmd_interface:
             o.cmd_interface.on_send_error(error, disp_id, from_address)
         if o.web_interface:
@@ -121,6 +145,8 @@ def run(config:config_reader.Config):
     log().info(f'Loading device information from {model_path}')
     model = BsbModel.parse_file(config.gateway.device + ".json")
     
+    # TODO: choose adapter class based on adapter_device setting
+    adapter = SerialSource.from_adapter_settings(config.adapter)
     bsbcomm = BsbComm(config.adapter, model)
     
     loggers = SingleFieldLogger.from_config(config.loggers, model)
@@ -139,6 +165,7 @@ def run(config:config_reader.Config):
         web_interface = None
                 
     BsbGateway(
+        adapter=adapter,
         bsbcomm=bsbcomm,
         loggers=loggers,
         cmd_interface=cmd_interface,

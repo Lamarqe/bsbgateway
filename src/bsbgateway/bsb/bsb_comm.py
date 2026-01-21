@@ -10,9 +10,9 @@ import queue
 import time
 
 # FIXME: importing from parent, this smells bad
+from bsbgateway.hub.adapter_settings import AdapterSettings
 from bsbgateway.hub.event_sources import EventSource
 from bsbgateway.hub.event import event
-from bsbgateway.hub.serial_source import SerialSource
 
 from .model import BsbModel
 from .bsb_telegram import BsbTelegram
@@ -21,47 +21,6 @@ from .errors import ValidateError, EncodeError
 log = lambda: logging.getLogger(__name__)
 
 MAX_PENDING_REQUESTS = 50
-
-@dc.dataclass
-class AdapterSettings:
-    """Settings for the IO adapter used to connect to the BSB bus.
-    
-    Hardware settings are ignored when using simulation."""
-    adapter_device: str = "/dev/ttyUSB0"
-    """The device name of the serial adapter.
-
-    * '/dev/ttyS0' ... '/dev/ttyS3' are usual devices for real serial ports.
-    * '/dev/ttyUSB0' is the usual device for a USB-to-serial converter on Linux.
-    * ':sim' opens a simple device simulation (no actual serial port required)
-    """
-    port_baud: int = 4800
-    """Baudrate - typical value for BSB bus is 4800."""
-    port_stopbits: float = 1
-    """Stopbits - 1, 1.5 or 2. For BSB bus, use 1."""
-    port_parity: str = 'odd'
-    """Parity - 'none', 'odd' or 'even'. For BSB bus, use 'odd' if you invert bytes, "even" if not."""
-    invert_bytes: bool = True
-    """Invert all bits after receive + before send?
-    
-    If you use a simple BSB-to-UART level converter, you most probably need to
-    set this to True.
-    """
-    expect_cts_state: bool | None = None
-    """Only send if CTS has this state (True or False); None to disable.
-
-    Use this if your adapter has a "bus in use" detection wired to CTS pin of
-    the RS232 interface.
-    """
-    write_retry_time: float = 0.005
-    """Wait time in seconds if blocked by CTS (see above)."""
-    min_wait_s: float = 0.1
-    """Minimum wait time between subsequent data requests on the bus.
-
-    Used to avoid blocking up the bus when lots of requests come in at once. In case of contention, the oldest requests are dropped.
-
-    Note that the web interface has builtin timeout of 3.0 s. I.e. if you send
-    more than (3.0 / min_wait_s) requests at once, data will be lost.
-    """
 
 class BsbComm(EventSource):
     '''simplifies the conversion between serial data and BsbTelegrams.
@@ -75,21 +34,11 @@ class BsbComm(EventSource):
     _leftover_data = b''
     
     def __init__(o, adapter_settings:AdapterSettings, device:BsbModel):
-        o.serial = SerialSource(
-            port_num=adapter_settings.adapter_device,
-            # use sane default values for the rest if not set
-            port_baud=adapter_settings.port_baud,
-            port_stopbits=adapter_settings.port_stopbits,
-            port_parity=adapter_settings.port_parity,
-            # Most simple RS232 level converters will deliver inverted bytes.
-            invert_bytes=adapter_settings.invert_bytes,
-            expect_cts_state=adapter_settings.expect_cts_state,
-            write_retry_time=adapter_settings.write_retry_time,
-        )
         o.device:BsbModel = device
         o._leftover_data = b''
         o.min_wait_s = adapter_settings.min_wait_s
-        o._do_throttled = None
+        with throttle_factory(min_wait_s=o.min_wait_s) as do_throttled:
+            o._do_throttled = do_throttled
         
     @event
     def bsb_telegrams(telegrams:list[BsbTelegram]):
@@ -107,19 +56,28 @@ class BsbComm(EventSource):
         Errors might occur due to validation errors, encoding errors or failed IO.
         '''
 
+    @event
+    def tx_bytes(data:bytes):
+        '''Emitted to request bytes to be sent to the IO adapter.'''
+
     def run(o):
-        def convert_data(timestamp, data):
-            telegrams = o.process_received_data(timestamp, data)
-            o.bsb_telegrams(telegrams)
-        o.serial.data += convert_data
         with throttle_factory(min_wait_s=o.min_wait_s) as do_throttled:
             o._do_throttled = do_throttled
-            o.serial.run()
+            # block here until context is exited
+            while o._running:
+                time.sleep(1)
         o._do_throttled = None
         
-    def process_received_data(o, timestamp, data) -> list[BsbTelegram]:
-        '''timestamp: unix timestamp
-        data: incoming data (byte string) from the serial port
+    def rx_bytes(o, data:bytes):
+        '''data: incoming data (byte string) from the adapter
+
+        Triggers bsb_telegrams with the converted result.
+        '''
+        telegrams = o.process_received_data(data)
+        o.bsb_telegrams(telegrams)
+
+    def process_received_data(o, data) -> list[BsbTelegram]:
+        '''data: incoming data (byte string) from the adapter
         return list of (which_address, telegram)
         if promiscuous=True:
             all telegrams are returned. Telegrams not for me get which_address=None.
@@ -127,6 +85,7 @@ class BsbComm(EventSource):
             Only telegrams that have the right bus address and packettype 7 (return value)
             are included in the result.
         '''
+        timestamp = time.time()
         telegrams = BsbTelegram.deserialize(o._leftover_data + data, o.device)
         result = []
         if not telegrams:
@@ -188,7 +147,7 @@ class BsbComm(EventSource):
     def _send_throttled(o, data:bytes):
         if not o._do_throttled:
             raise IOError("Cannot send: Not running")
-        o._do_throttled(lambda: o.serial.write(data))
+        o._do_throttled(lambda: o.tx_bytes(data))
         
 
 @contextmanager
