@@ -179,7 +179,7 @@ def _serialize_value(val, dtype:BsbType):
         BsbDatatype.Bits,
     ] or dtype.name.lower() == 'year':
         return '%g'%val
-    elif datatype in [BsbDatatype.String]:
+    elif datatype == BsbDatatype.String:
         return str(val)
     elif datatype == BsbDatatype.Datetime:
         return val.strftime('%Y-%m-%d %H:%M:%S')
