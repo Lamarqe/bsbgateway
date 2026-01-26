@@ -39,7 +39,7 @@ class Bsb2TcpSettings:
     @property
     def token_bytes(o) -> bytes:
         """Get the token as bytes."""
-        return bytes.fromhex(o.token.replace(" ", ""))
+        return bytes.fromhex(o.token)
 
 class Bsb2Tcp:
     """Bridges BSB Bus to a TCP/IP server.
@@ -50,6 +50,8 @@ class Bsb2Tcp:
         if not settings.enable:
             raise ValueError("tried to instanciate Bsb2Tcp while disabled in settings")
         o.settings = settings
+        if len(settings.token_bytes) != 32:
+            raise ValueError("Token must be 32 bytes long")
         o.server = TcpServerTransport(port=settings.port)
         o.server.set_on_received(o._on_tcp_received)
         o.authenticated_clients = set()
