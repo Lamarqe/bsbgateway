@@ -60,3 +60,4 @@ bsbgateway.kdev4
 
 .vscode/*
 .venv
+bsbgateway.ini
