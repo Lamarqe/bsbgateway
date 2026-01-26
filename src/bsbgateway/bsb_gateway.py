@@ -107,7 +107,12 @@ class BsbGateway(object):
         """
         o._running = True
         while o._running:
-            action = o._queue.get()
+            try:
+                action = o._queue.get()
+            except KeyboardInterrupt:
+                log().info("KeyboardInterrupt received, shutting down.")
+                o.quit()
+                return
             try:
                 action()
             except Exception as e:
