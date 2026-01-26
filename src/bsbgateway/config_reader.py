@@ -38,10 +38,12 @@ class Config:
 def xdg_config_home() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
 
-def load_config() -> tuple[Path|None, Config]:
-    """Load configuration from default location.
+def load_config(force_path:Path|None) -> tuple[Path|None, Config]:
+    """Load configuration from default location, unless a specific path is forced.
+
+    if force_path is given, tries to load config from that path.
     
-    First tries to load from bsbgateway.ini in the current working directory,
+    Otherwise, first tries to load from bsbgateway.ini in the current working directory,
     then from $XDG_CONFIG_HOME/bsbgateway/bsbgateway.ini (var. usually expands to ~/config),
     then from /etc/bsbgateway/bsbgateway.ini.
 
@@ -50,21 +52,24 @@ def load_config() -> tuple[Path|None, Config]:
     Returns:
         Tuple of (Path to used config file, Config object). Path is None if no file was used.
     """
-    config_paths = [
-        Path.cwd() / 'bsbgateway.ini',
-        xdg_config_home() / 'bsbgateway/bsbgateway.ini',
-        Path('/etc/bsbgateway/bsbgateway.ini'),
-    ]
+    if force_path is not None:
+        config_file = force_path
+    else:
+        config_paths = [
+            Path.cwd() / 'bsbgateway.ini',
+            xdg_config_home() / 'bsbgateway/bsbgateway.ini',
+            Path('/etc/bsbgateway/bsbgateway.ini'),
+        ]
+        
+        config_file = None
+        for path in config_paths:
+            if path.exists():
+                config_file = path
+                break
     
-    config_file = None
-    for path in config_paths:
-        if path.exists():
-            config_file = path
-            break
-    
-    if config_file is None:
+    if config_file is None or not config_file.exists():
         L().info("No config file found, using defaults")
-        return None, _create_default_config()
+        return config_file, _create_default_config()
     
     L().info(f"Loading config from {config_file}")
     parser = cp.ConfigParser()
@@ -82,6 +87,7 @@ def _create_default_config() -> Config:
         web_interface=WebInterfaceConfig(),
         cmd_interface=CmdInterfaceConfig(),
         loggers=LoggerConfig(),
+        bsb2tcp=Bsb2TcpSettings(),
     )
 
 
