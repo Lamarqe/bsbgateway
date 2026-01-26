@@ -45,6 +45,7 @@ dependencies = [
     "Flask",
     "attrs",
     "cattrs (>=24.1.0)",
+    "quickrpc",
 ]
 
 [project.optional-dependencies]

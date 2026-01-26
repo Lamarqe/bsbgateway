@@ -14,6 +14,7 @@ from .hub.event_sources import SyncedSecondTimerSource
 from .single_field_logger import SingleFieldLogger
 from .web_interface import WebInterface
 from .cmd_interface import CmdInterface
+from .bsb2tcp import Bsb2Tcp
 from .bsb.model import BsbModel
 from .bsb.bsb_comm import BsbComm
 from . import config_reader
@@ -35,7 +36,7 @@ class BsbGateway(object):
     get/set requests, and receives bsb_telegrams and send_error events.
 
     """
-    def __init__(o, adapter, bsbcomm, loggers, cmd_interface=None,web_interface=None):
+    def __init__(o, adapter, bsbcomm, loggers, cmd_interface=None,web_interface=None, bsb2tcp=None):
         o._queue = Queue()
         o._running = False
 
@@ -43,6 +44,7 @@ class BsbGateway(object):
         o._timer = SyncedSecondTimerSource()
         o._adapter = adapter
         o._bsbcomm = bsbcomm
+        o.bsb2tcp = bsb2tcp
         o.loggers = loggers
         o.web_interface = web_interface
         o.cmd_interface = cmd_interface
@@ -90,6 +92,14 @@ class BsbGateway(object):
         for logger in o.loggers:
             logger.send_get += _marshal(o.on_send_get)
             # Logger driven by timer tick - no need to start
+        
+        if o.bsb2tcp:
+            # BSB2TCP, bypassing BSB Comm (works on bytes level)
+            # forward received TCP data to IO Adapter and vice versa
+            o.bsb2tcp.rx_bytes += _marshal(o._adapter.tx_bytes)
+            o._adapter.rx_bytes += _marshal(o.bsb2tcp.tx_bytes)
+
+            o.bsb2tcp.start()
 
 
     def run_eventloop(o):
@@ -135,6 +145,9 @@ class BsbGateway(object):
         o._bsbcomm.send_set(disp_id, value, from_address, validate=validate)
                         
     def quit(o):
+        if o.bsb2tcp:
+            # Not a daemon, must be stopped explicitly
+            o.bsb2tcp.stop()
         o._running = False
         
     def cmdline_set(o, disp_id, value, validate=True):
@@ -155,6 +168,11 @@ def run(config:config_reader.Config):
             log().info(f'Creating trace directory {p}')
             os.makedirs(p)
 
+    if config.bsb2tcp.enable:
+        bsb2tcp = Bsb2Tcp(config.bsb2tcp)
+    else:
+        bsb2tcp = None
+
     if config.cmd_interface.enable:
         cmd_interface = CmdInterface(config.cmd_interface, model)
     else:
@@ -170,4 +188,5 @@ def run(config:config_reader.Config):
         loggers=loggers,
         cmd_interface=cmd_interface,
         web_interface=web_interface,
+        bsb2tcp=bsb2tcp,
     ).run()

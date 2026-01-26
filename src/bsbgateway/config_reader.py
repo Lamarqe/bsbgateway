@@ -9,11 +9,13 @@ from typing import Any
 from cattrs import Converter
 from cattrs.cols import is_sequence, list_structure_factory
 
+
 from .gateway_config import GatewayConfig
 from .bsb.bsb_comm import AdapterSettings
 from .single_field_logger import LoggerConfig
 from .cmd_interface import CmdInterfaceConfig
 from .web_interface.config import WebInterfaceConfig
+from .bsb2tcp import Bsb2TcpSettings
 
 L = lambda: logging.getLogger(__name__)
 
@@ -24,6 +26,8 @@ class Config:
     """Global gateway configuration: Device name and logging."""
     adapter: AdapterSettings
     """Settings for the serial adapter."""
+    bsb2tcp: Bsb2TcpSettings
+    """Configuration for the BSB to TCP/IP bridge."""
     web_interface: WebInterfaceConfig
     """Web interface configuration."""
     cmd_interface: CmdInterfaceConfig
@@ -108,7 +112,7 @@ def _parse_config(parser: cp.ConfigParser) -> Config:
     for section in ("loggers", "gateway"):
         # Use defaults if section missing
         raw.setdefault(section, {})
-    for section in ("cmd_interface", "web_interface"):
+    for section in ("cmd_interface", "web_interface", "bsb2tcp"):
         # Disable if section missing
         raw.setdefault(section, {"enable": "false"})
 

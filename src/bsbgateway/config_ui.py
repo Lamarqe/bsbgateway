@@ -175,6 +175,12 @@ def _configure_dataclass_menu(obj: T, parent_name: str = "", is_submenu: bool = 
                 items.append(f"  {i}) {display_name} ...")
             else:
                 items.append(f"  {i}) {display_name}: {current_value}")
+
+        # Special options
+        # Bsb2TcpSettings
+        if hasattr(obj, "get_random_token"):
+            items.append("")
+            items.append("  t) Generate random token")
         
         # Exit options
         items.append("")
@@ -184,6 +190,7 @@ def _configure_dataclass_menu(obj: T, parent_name: str = "", is_submenu: bool = 
         else:
             items.append(f"  a) or Return: Accept + save changes")
             items.append(f"  x) Exit without saving")
+
         
         for item in items:
             print(item)
@@ -197,6 +204,8 @@ def _configure_dataclass_menu(obj: T, parent_name: str = "", is_submenu: bool = 
             return new_obj, is_changed
         elif choice == "x":
             return obj, False
+        elif choice == "t":
+            new_obj.token = new_obj.get_random_token() #type: ignore
 
         try:
             choice_num = int(choice)
