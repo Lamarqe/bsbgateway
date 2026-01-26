@@ -103,6 +103,14 @@ def configure(config, config_path:Path|None):
     return new_config
 
 
+def change_loglevel(level:str):
+    """Change loglevel of the root logger."""
+    numeric_level = getattr(logging, level.upper(), None)
+    if not isinstance(numeric_level, int):
+        L().warning(f"Invalid log level: {level}")
+        return
+    logging.getLogger().setLevel(numeric_level)
+
 def cli_menu(config, config_path:Path|None):
     running = True
     while running:
@@ -120,6 +128,7 @@ def cli_menu(config, config_path:Path|None):
                 running = False
             case "c":
                 config = configure(config, config_path)
+                change_loglevel(config.gateway.loglevel)
             case "r":
                 running = False
                 bsb_gateway.run(config)
