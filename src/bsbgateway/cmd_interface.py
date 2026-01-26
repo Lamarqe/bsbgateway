@@ -17,6 +17,7 @@ log = lambda: logging.getLogger(__name__)
 
 @dc.dataclass
 class CmdInterfaceConfig:
+    """Commandline interface settings."""
     enable: bool = True
     """Enable command line interface."""
     bsb_address: int = 24

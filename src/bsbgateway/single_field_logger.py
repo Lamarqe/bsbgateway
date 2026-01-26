@@ -10,6 +10,12 @@ from bsbgateway.hub.event import event
 
 @dc.dataclass
 class LoggerConfig:
+    """Single field loggers.
+    
+    Loggers will request and log the configured fields at the specified intervals.
+
+    If no fields are configured (field_disp_ids is empty list), logging is disabled.
+    """
     field_disp_ids: list[int] = dc.field(default_factory=lambda: [])
     """List of field display IDs (4-digit ids) to log."""
     intervals: list[int] = dc.field(default_factory=lambda: [])

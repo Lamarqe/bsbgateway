@@ -2,6 +2,7 @@ import dataclasses as dc
 
 @dc.dataclass
 class GatewayConfig:
+    """Central configuration options."""
     loglevel: str = 'INFO'
     """Logging level for the gateway. One of 'DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'."""
     device: str = 'broetje_isr_plus'

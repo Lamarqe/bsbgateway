@@ -19,8 +19,9 @@ L = lambda: logging.getLogger(__name__)
 
 @dc.dataclass
 class Config:
+    """Configuration of BSB Gateway."""
     gateway: GatewayConfig
-    """Overall gateway configuration: Device name and logging."""
+    """Global gateway configuration: Device name and logging."""
     adapter: AdapterSettings
     """Settings for the serial adapter."""
     web_interface: WebInterfaceConfig

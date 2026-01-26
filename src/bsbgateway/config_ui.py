@@ -159,6 +159,8 @@ def _configure_dataclass_menu(obj: T, parent_name: str = "", is_submenu: bool = 
         # Build menu items
         menu_title = f"{_get_field_display_name(parent_name)}" if parent_name else "BsbGateway Configuration"
         print(f"\n=== {menu_title} ===\n")
+        print(inspect.cleandoc(str(obj.__doc__)))
+        print()
         
         items = []
         field_indices = {}
