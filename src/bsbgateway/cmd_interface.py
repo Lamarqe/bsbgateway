@@ -104,7 +104,7 @@ class CmdInterface(EventSource):
         o._dump_filter = 'False'
     
     @event
-    def quit():
+    def quit(reason:str):
         """Request to quit the gateway."""
 
     @event
@@ -146,7 +146,7 @@ class CmdInterface(EventSource):
             print('Error sending to field %d: %s'%(disp_id, str(error)))
         
     def cmd_quit(o):
-        o.quit()
+        o.quit("CLI command")
                         
     def cmd_get(o, disp_id: int):
         disp_id = int(disp_id)

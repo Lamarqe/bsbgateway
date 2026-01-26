@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import os
+import signal
 
 import logging
 from queue import Queue
@@ -50,7 +51,6 @@ class BsbGateway(object):
     def run(o):
         o.setup_modules()
         o.run_eventloop()
-        # TODO: Clean shutdown of modules
 
     def setup_modules(o):
         def _marshal(handler):
@@ -99,6 +99,11 @@ class BsbGateway(object):
 
             o.bsb2tcp.start()
 
+        # Register signal handlers for clean shutdown
+        signal.signal(signal.SIGTERM, lambda signum, frame: _marshal(o.quit)("SIGTERM"))
+        # SIGINT is handled by KeyboardInterrupt in the event loop
+        signal.signal(signal.SIGHUP, lambda signum, frame: _marshal(o.quit)("SIGHUP"))
+
 
     def run_eventloop(o):
         """Pull events from the queue and dispatch them.
@@ -110,8 +115,7 @@ class BsbGateway(object):
             try:
                 action = o._queue.get()
             except KeyboardInterrupt:
-                log().info("KeyboardInterrupt received, shutting down.")
-                o.quit()
+                o.quit("Ctrl+C")
                 return
             try:
                 action()
@@ -147,7 +151,8 @@ class BsbGateway(object):
     def on_send_set(o, disp_id:int, value, from_address:int, validate:bool=True):
         o._bsbcomm.send_set(disp_id, value, from_address, validate=validate)
                         
-    def quit(o):
+    def quit(o, reason="unknown"):
+        log().info(f"Shutting down BSB Gateway. Requested by: {reason}")
         if o.bsb2tcp:
             # Not a daemon, must be stopped explicitly
             o.bsb2tcp.stop()
