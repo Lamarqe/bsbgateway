@@ -95,6 +95,7 @@ class SerialSource(EventSource):
 
     @classmethod
     def from_adapter_settings(o, settings:AdapterSettings):
+        assert settings.adapter_type in ('serial', 'sim')
         return o(
             port_num=settings.adapter_device,
             # use sane default values for the rest if not set

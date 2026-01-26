@@ -10,13 +10,20 @@ class AdapterSettings:
     
     Hardware settings are ignored when using simulation."""
 
-    adapter_type: Literal["serial", "sim"] = "serial"
-    """Type of adapter to use: 'serial' for real serial port, 'sim' for simulation.
+    adapter_type: Literal["serial", "sim", "tcp"] = "serial"
+    """Type of adapter to use: 
+
+    * 'serial' for real serial port
+    * 'sim' for simulation
+    * 'tcp' to connect to a BsbGateway instance via TCP
+
+    In case of 'tcp', the remote instance must have the Bsb2Tcp module enabled.
 
     Further required settings depend on the adapter type:
 
     * sim: only min_wait_s is used.
-    * serial: all settings are used.
+    * serial: port_baud, port_stopbits, port_parity, adapter_device, invert_bytes, expect_cts_state, write_retry_time, min_wait_s are used.
+    * tcp: tcp_host, tcp_port, tcp_token, min_wait_s are used. tcp_token must match the token configured in the remote BsbGateway instance.
     """
 
     adapter_device: str = "/dev/ttyUSB0"
@@ -45,6 +52,14 @@ class AdapterSettings:
     """
     write_retry_time: float = 0.005
     """Wait time in seconds if blocked by CTS (see above)."""
+
+    tcp_host: str = ""
+    """Hostname or IP address of the remote BsbGateway instance."""
+    tcp_port: int = 8580
+    """TCP port of the remote BsbGateway instance."""
+    tcp_token: str = ""
+    """Authentication token for the remote BsbGateway instance, as hex string."""
+
     min_wait_s: float = 0.1
     """Minimum wait time between subsequent data requests on the bus.
 
