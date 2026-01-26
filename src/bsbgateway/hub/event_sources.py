@@ -68,8 +68,10 @@ class EventSource(object):
 
     def start_thread(o, new_thread=True):
         '''starts the source in a new thread and returns the thread.'''
+        if not hasattr(o, "name"):
+            o.name = o.__class__.__name__
         if new_thread:
-            thread = Thread(target=o._run_wrapper, name=o.__class__.__name__)
+            thread = Thread(target=o._run_wrapper, name=o.name)
             thread.daemon = o._as_daemon
             thread.start()
             return thread

@@ -19,6 +19,8 @@ log = lambda: logging.getLogger(__name__)
 
 class WebInterface(EventSource):
     """Web interface for BSB Gateway using Flask."""
+    # Leave me time to shut down properly
+    _as_daemon = False
 
     def __init__(self, config: WebInterfaceConfig, device:BsbModel):
         self.device = device

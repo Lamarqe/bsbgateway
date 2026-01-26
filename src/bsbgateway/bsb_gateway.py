@@ -146,6 +146,12 @@ class BsbGateway(object):
         if o.bsb2tcp:
             # Not a daemon, must be stopped explicitly
             o.bsb2tcp.stop()
+        if o.cmd_interface:
+            o.cmd_interface.stop()
+        if o.web_interface:
+            o.web_interface.stop()
+        o._bsbcomm.stop()
+        o._adapter.stop()
         o._running = False
         
     def cmdline_set(o, disp_id, value, validate=True):
