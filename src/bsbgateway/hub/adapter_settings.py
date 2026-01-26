@@ -2,18 +2,28 @@
 # Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import dataclasses as dc
+from typing import Literal
 
 @dc.dataclass
 class AdapterSettings:
     """Settings for the IO adapter used to connect to the BSB bus.
     
     Hardware settings are ignored when using simulation."""
+
+    adapter_type: Literal["serial", "sim"] = "serial"
+    """Type of adapter to use: 'serial' for real serial port, 'sim' for simulation.
+
+    Further required settings depend on the adapter type:
+
+    * sim: only min_wait_s is used.
+    * serial: all settings are used.
+    """
+
     adapter_device: str = "/dev/ttyUSB0"
     """The device name of the serial adapter.
 
     * '/dev/ttyS0' ... '/dev/ttyS3' are usual devices for real serial ports.
     * '/dev/ttyUSB0' is the usual device for a USB-to-serial converter on Linux.
-    * ':sim' opens a simple device simulation (no actual serial port required)
     """
     port_baud: int = 4800
     """Baudrate - typical value for BSB bus is 4800."""

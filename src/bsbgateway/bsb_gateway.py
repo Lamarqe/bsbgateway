@@ -3,12 +3,10 @@
 
 import os
 
-import importlib
 import logging
 from queue import Queue
 
-from bsbgateway.bsb.model_merge import merge
-from bsbgateway.hub.serial_source import SerialSource
+from bsbgateway.hub.adapter import get_adapter
 
 from .hub.event_sources import SyncedSecondTimerSource
 from .single_field_logger import SingleFieldLogger
@@ -159,7 +157,7 @@ def run(config:config_reader.Config):
     model = BsbModel.parse_file(config.gateway.device + ".json")
     
     # TODO: choose adapter class based on adapter_device setting
-    adapter = SerialSource.from_adapter_settings(config.adapter)
+    adapter = get_adapter(config.adapter)
     bsbcomm = BsbComm(config.adapter, model)
     
     loggers = SingleFieldLogger.from_config(config.loggers, model)

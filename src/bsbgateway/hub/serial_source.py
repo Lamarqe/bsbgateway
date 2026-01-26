@@ -65,10 +65,12 @@ class SerialSource(EventSource):
         port_parity='none',
         invert_bytes = False,
         expect_cts_state = None,
+        simulation: bool = False,
         write_retry_time = 0.01,
     ):
         o.stoppable = True
         o.serial_port:Serial|VirtualSerial = None
+        o._simulation = simulation
         o._invert_bytes = invert_bytes
 
         o._expect_cts_state = expect_cts_state
@@ -103,6 +105,7 @@ class SerialSource(EventSource):
             invert_bytes=settings.invert_bytes,
             expect_cts_state=settings.expect_cts_state,
             write_retry_time=settings.write_retry_time,
+            simulation=settings.adapter_type == "sim",
         )
 
     @event
@@ -113,7 +116,7 @@ class SerialSource(EventSource):
         """
 
     def run(o):
-        if o._serial_arg["port"] == ":sim":
+        if o._simulation:
             o.serial_port = VirtualSerial(**o._serial_arg, responder=virtual_device)
         else:
             o.serial_port = serial.Serial(**o._serial_arg)
