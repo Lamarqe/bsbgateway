@@ -10,3 +10,8 @@ class GatewayConfig:
 
     Read "device" = "index of available fields".
     """
+    locale: str = ''
+    """Locale for field names and descriptions, e.g. 'DE' for German, 'EN' for English.
+    
+    If empty, the system locale is used.
+    """

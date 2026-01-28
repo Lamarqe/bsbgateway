@@ -365,6 +365,17 @@ class BsbDevice:
     var: int
     """byte, 255 = generic"""
 
+_PREFERED_LANGUAGE = ""
+
+def set_prefered_language(lang: str=""):
+    """Set the prefered language for I18nstr instances.
+
+    lang: language code, e.g. "en", "de", "ru"
+
+    Empty string resets to system locale.
+    """
+    global _PREFERED_LANGUAGE
+    _PREFERED_LANGUAGE = lang.lower()
 
 def _os_language():
     lang_country, encoding = locale.getdefaultlocale()
@@ -384,6 +395,7 @@ class I18nstr(dict):
 
     * If requested locale is not available, return EN (english)
     * If english is also unavailable, return KEY
+    * If also not available, return the first-best value
     * if also not available, return "<MISSING TEXT>"
     """
 
@@ -398,10 +410,12 @@ class I18nstr(dict):
             return self["EN"]
         if "KEY" in self:
             return self["KEY"]
+        if len(self) > 0:
+            return next(iter(self.values()))
         return "<MISSING TEXT>"
 
     def __str__(self):
-        return self.__getattr__(_os_language())
+        return self.__getattr__(_PREFERED_LANGUAGE or _os_language())
 
     def copy(self):
         return I18nstr(self.copy())

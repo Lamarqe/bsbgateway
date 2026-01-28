@@ -15,7 +15,7 @@ from .single_field_logger import SingleFieldLogger
 from .web_interface import WebInterface
 from .cmd_interface import CmdInterface
 from .bsb2tcp import Bsb2Tcp
-from .bsb.model import BsbModel
+from .bsb.model import BsbModel, set_prefered_language
 from .bsb.bsb_comm import BsbComm
 from . import config_reader
 
@@ -192,6 +192,7 @@ def run(config:config_reader.Config):
     model_path = find_model_file(config.gateway.device)
     log().info(f'Loading device information from {model_path}')
     model = BsbModel.parse_file(str(model_path))
+    set_prefered_language(config.gateway.locale)
     
     # TODO: choose adapter class based on adapter_device setting
     adapter = get_adapter(config.adapter)
