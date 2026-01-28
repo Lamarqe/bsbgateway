@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import os
+from pathlib import Path
 import signal
 
 import logging
@@ -167,10 +168,30 @@ class BsbGateway(object):
     def cmdline_set(o, disp_id, value, validate=True):
         o._bsbcomm.send_set(disp_id, value, 1, validate=validate)
 
+def find_model_file(device_name: str) -> Path:
+    """Find the model file for the given device name.
+
+    model file name is device name plus .json extension.
+
+    Searches in the current directory, then in ~/.config/bsbgateway, then in /etc/bsbgateway. 
+
+    Returns the path to the model file if found, else raises FileNotFoundError.
+    """
+    possible_paths = [
+        Path(f"{device_name}.json"),
+        config_reader.xdg_config_home() / "bsbgateway" / f"{device_name}.json",
+        Path(f"/etc/bsbgateway/{device_name}.json"),
+    ]
+    for path in possible_paths:
+        if path.exists() and path.is_file():
+            return path
+    raise FileNotFoundError(f"'{device_name}.json' not found.")
+
+
 def run(config:config_reader.Config):
-    model_path = config.gateway.device + ".json"
+    model_path = find_model_file(config.gateway.device)
     log().info(f'Loading device information from {model_path}')
-    model = BsbModel.parse_file(config.gateway.device + ".json")
+    model = BsbModel.parse_file(str(model_path))
     
     # TODO: choose adapter class based on adapter_device setting
     adapter = get_adapter(config.adapter)
