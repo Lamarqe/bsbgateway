@@ -139,7 +139,7 @@ class BsbTelegram(object):
         else:
             value = None
 
-        if packettype not in ["ret", "set"]:
+        if packettype not in ["ret", "set", "inf"]:
             assert value is None
             assert rawdata == b""
 
