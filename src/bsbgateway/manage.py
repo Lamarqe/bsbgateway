@@ -119,6 +119,7 @@ def cli_menu(config, config_path:Path|None):
   c) Configure BsbGateway
   r) Run BsbGateway within terminal
   i) Install system service (requires root)
+  s) restart system service (requires root)
   u) Uninstall system service (requires root)
 
   x) Exit""")
@@ -134,5 +135,7 @@ def cli_menu(config, config_path:Path|None):
                 bsb_gateway.run(config)
             case "i":
                 install_service()
+            case "s":
+                sudo("systemctl", "restart", SERVICE_NAME)
             case "u":
                 uninstall_service()
