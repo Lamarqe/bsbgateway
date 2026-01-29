@@ -8,7 +8,7 @@ Lots of work was done by the guys at [mikrocontroller.net](https://www.mikrocont
 
 The packet structure was deciphered by one Niobos here: http://blog.dest-unreach.be/2012/12/14/reverse-engineering-the-elco-heating-protocol
 
-The value formats (except for temperature values) were deciphered by myself. They may be universal or only for the Broetje ISR, I don't know.
+The value formats (except for temperature values) were deciphered by myself; I also took some info from BSB-Lan recently.
 
 
 ## Packet structure
@@ -97,7 +97,7 @@ The flags probably works the same as for `int8`.
 
 The value is big-endian. A common use is for operating time counters, where the value is the operating time in seconds.
 
-### Time
+### "Hour-minute" field
 
 Time fields encode a time in three bytes: `<flag>` (1B), `<hour>` (1B), `<minute>` (1B) e.g. `00 06 1E` (06:30).
 
@@ -115,4 +115,20 @@ Unused intervals are set by the sequence `80 00 00 00`. (My device then returns 
 
 The LCD panel sorts unused intervals to the end, sorts by start time and merges overlapping intervals.
 
-*So far, the schedule type is not implemented in BsbGateway.*
+### Date/Time field
+
+There are various date/time types, which basically all use the same encoding:
+
+```
+f1 yy mm dd dow hh min sec f2
+```
+
+with:
+
+- `f1`: value flag (as above);
+- `yy`, `mm`, `dd`: year, month, day
+- `dow`: day of week
+- `hh`, `min`, `sec`: hour, minute, seconds
+- `f2` flag identifying the subtype.
+
+The `f2` flag basically tells us which of the individual fields are considered relevant. Currently I don't know how this mapping is defined.

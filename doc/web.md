@@ -1,10 +1,19 @@
 # BsbGateway - Web Interface
 
-The web interface can be reached via any browser at the configured port. You need to know the IP address of the computer where BsbGateway is running on. In your browser, enter the address like: `http://192.168.1.123:8081`. You should see the index page listing the available groups.
+The web interface can be reached via any browser at the configured port (default: 8082). You need to know the IP address of the computer where BsbGateway is running on. In your browser, enter the address like: `http://192.168.1.123:8082`. You should see the index page listing the available groups.
 
-No authentication or user levels are implemented so far. **Javascript must be enabled.**
+**Important:** JavaScript must be enabled in your browser.
 
-Usage of the web interface should be straightforward. Below follows a list of defined URLs. For automated getting/setting of values, have a look at `field-0815.value` and `field-0815 (POST)`.
+No authentication or user levels are implemented so far.
+
+## Quick Start
+
+1. Open `http://<gateway-ip>:8082` in your browser
+2. Click on a group number to see all fields in that group
+3. Click a field ID button to load its current value
+4. For writable fields, enter a new value and click "Set" to change it
+
+## Pages
 
 ## Index
 
@@ -20,7 +29,7 @@ If value loading does not work, most likely you need to enable Javascript. If th
 
 ## Field
 
-Multiple subqueries exist. Replace `<number>` with the 4-digit field number in each one. **Note that each query causes a GET telegram to be sent over the bus. No rate limiting is done.**
+Multiple subqueries exist. Replace `<number>` with the 4-digit field number in each one. **Note that each query causes a GET telegram to be sent over the bus.**
 
  * `/field-<number>`, e.g. `/field-1620` - displays the field as a standalone page.
 

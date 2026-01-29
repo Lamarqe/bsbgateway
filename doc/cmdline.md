@@ -73,8 +73,42 @@ Special cases:
  * `dump off`: dump nothing (the startup setting).
  * `dump on`: dump everything that goes over the bus.
  * `dump` without argument, toggle between on and off.
-            
-Some examples:
- * `dump type=ret` dumps all return telegrams (answer to get).
- * `dump field=8510` dumps all telegrams concerning that field.
- * `dump dst=10 or src=10` dumps all telegrams from or to address 10.
+
+### Dump Examples
+
+Here are common patterns to get you started:
+
+```
+dump on                          # Show all telegrams
+dump type=ret                    # Only response/return telegrams
+dump type=set                    # Only SET commands (someone changing values)
+dump field=8007                  # All telegrams for field 8007 (any type)
+dump field=8007 and type=ret     # Only responses for field 8007
+dump src=0                       # All telegrams from base device (address 0)
+dump dst=10                      # All telegrams to address 10 (usually the LCD panel)
+dump src=10 or dst=10            # All telegrams to/from address 10
+dump type=ack                    # Only acknowledgments (responses without data)
+dump field=8510 and type=set     # Monitoring who's changing field 8510
+dump src != 0 and type != ack    # Non-device messages that aren't simple acks
+```
+
+### Interpreting Dump Output
+
+A printed telegram looks like this:
+
+```
+<BsbTelegram 0 -> 10: ret 8310 Kesseltemperatur = 22.78125 °C [raw:00 05 B2 ] @19:59:57.671702>
+```
+
+The line consists of:
+
+- `00`: Source address (0 = base device)
+- `10`: Destination address (10 = LCD panel)
+- `ret`: Type of telegram (response to a get)
+- `8310`: The field ID followed by name, OR
+- `unknown command 0x31000212 ` if not in the device's command list yet
+- `22.78125 °C`: the decoded value
+- `00 05 B2`: undecoded value bytes (for ret/set/inf packets)
+- `@...` time when packet was received
+
+---

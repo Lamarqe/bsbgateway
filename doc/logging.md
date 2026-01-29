@@ -2,9 +2,34 @@
 
 In the config file, you can configure fields for logging. For each field the log interval is given.
 
+*Not to be confused with the "Gateway / Loglevel" setting, which controls printing of internal log messages.*
+
 Logging is rasterized so that the (unix) timestamp for each log point is a multiple of the interval. That means that log data points are evenly rasterized, even if BsbGateway is stopped and restarted. Also, if 24h / interval can be divided without remainder, the log times will be the same for each day.
 
 Each logger writes to a file named `<disp_id>.trace` in the configured trace directory. E.g. field 8510 would be logged to `8510.trace`. **The trace files are only ever appended to. Existing data cannot be overwritten.**
+
+### Configuration Example
+
+Use the `bsbgateway manage` tool or edit your `bsbgateway.ini`, and add a logging section:
+
+```ini
+[loggers]
+field_disp_ids = [8007, 8510, 1610]
+intervals = [60, 5, 300]
+tracefile_dir = /home/user/traces
+bsb_address = 23
+```
+
+This will:
+- Log field 8007 every 60 seconds (1 minute)
+- Log field 8510 every 5 seconds
+- Log field 1610 every 300 seconds (5 minutes)
+
+The trace directory will be created automatically if it doesn't exist.
+
+**When using bsbgateway as service, be sure to set an absolute path here.**
+
+## Retrieving Logged Data
 
 The trace format is described below. You can use `trace/load_trace.py` to load trace files into numpy arrays (requires `numpy`):
 
@@ -18,14 +43,13 @@ For further information, look at `Trace`'s docstring.
 
 ## Triggers
 
-You can define triggers. I.e. something happens when the trigger condition applies. Currently there are two types of trigger: `rising_edge` (Value climbs above a threshold) or `falling_edge` (Value below threshold). The only available action so far is to send an email. The sender credentials and recipient address must be given in `config.py`.
-
-When a trigger fires, it cannot be triggered again in the next 6 hours.
+The trigger / email notification feature was removed.
 
 
 ## Trace files
 
 The trace files are ASCII files with a primitive Run-length-encoding. The format is made so that stuff can be appended without worrying about what is already there.
+
 In short:
 
  * Lines starting with `:` contain metadata: `:<key> <value>`. Each key can appear multiple times. e.g. interval can change inbetween.
@@ -35,6 +59,7 @@ In short:
 
 Example:
 
+```
     :disp_id 8007
     :fieldname Status Solar
     :interval 5
@@ -49,3 +74,4 @@ Example:
     1~~~~~~~~
     2~
     1~~~~
+```
