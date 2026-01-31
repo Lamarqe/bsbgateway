@@ -46,6 +46,7 @@ class VirtualSerial(SerialBase):
 
     """
     def __init__(self, *args, responder=default_responder, **kwargs):
+        self.cts = False
         self.responder = responder
         super().__init__(*args, **kwargs)
 
