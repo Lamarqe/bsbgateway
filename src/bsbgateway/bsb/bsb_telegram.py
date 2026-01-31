@@ -2,6 +2,7 @@
 # Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import dataclasses as dc
+from datetime import datetime
 import struct
 from typing import Any, Literal
 from .crc16pure import crc16xmodem
@@ -188,12 +189,15 @@ class BsbTelegram(object):
     # let's try dataclass builtin representation for now
     def __str__(o):
         rawdata = "".join(["%0.2X " % i for i in o.rawdata])
-        ts = " @%f" % o.timestamp if o.timestamp else ""
+        ts = " @" + datetime.fromtimestamp(o.timestamp).strftime("%H:%M:%S.%f") if o.timestamp else ""
         unit = o.field.unit
         unit = " " + unit if unit else ""
-        fieldname = f"{o.field.disp_id} {o.field.disp_name}"
+        if o.field.disp_id > 0:
+            fieldname = f"{o.field.disp_id} {o.field.disp_name}"
+        else:
+            fieldname = f"{o.field.disp_name} 0x{o.field.telegram_id:08X}"
 
-        if o.packettype in ("ret", "set"):
+        if o.packettype in ("ret", "set", "inf"):
             data_txt = f" = {o.data}{unit} [raw:{rawdata}]"
         else:
             data_txt = ""
