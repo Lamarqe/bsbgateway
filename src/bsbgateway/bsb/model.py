@@ -133,7 +133,7 @@ class BsbCommand:
 
     description: "I18nstr"
 
-    device: List["BsbDevice"]
+    device: List["BsbDevice"] = attr.Factory(list)
     """Device(s) for which the command exists."""
 
     type: Optional["BsbType"] = None
