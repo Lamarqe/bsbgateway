@@ -30,7 +30,7 @@ Alternatively and/or for hacking, you can clone the repository, then run `bsbgat
 
 In both cases, you get `bsbgateway` as user-mode-program. In order to set it up and configure as system service, use the management mode (`bsbgateway manage`). See following sections.
 
-You will need a device description file. See [devices](https://github.com/loehnertj/bsbgateway/devices)
+You will need a device description file. See [devices](https://github.com/loehnertj/bsbgateway/tree/master/devices)
 
 ## After installation
 
