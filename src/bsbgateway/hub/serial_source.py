@@ -19,6 +19,7 @@
 ##############################################################################
 
 import time
+import logging
 from threading import Thread
 import queue
 import serial
@@ -31,6 +32,7 @@ from ..virtual_serial import VirtualSerial
 from ..virtual_device import virtual_device
 from .event_sources import EventSource
 
+L = lambda: logging.getLogger(__name__)
 
 class SerialSource(EventSource):
     """ A source for monitoring a COM port. The COM port is 
@@ -182,9 +184,7 @@ class SerialSource(EventSource):
                 cnt += 1
                 if o._stopflag: return
             if cnt>=100:
-                print('could not send packet: not clear to send after 100 wait cycles')
+                L().error('could not send packet: not clear to send after 100 wait cycles')
                 continue
             o.serial_port.write(data)
-
-
 
