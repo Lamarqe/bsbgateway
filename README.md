@@ -20,18 +20,17 @@ The circuit that I use is drawn [here](doc/hardware.md), but not recommended for
 The serial port driver evaluates the `CTS` (clear-to-send) pin of the RS232 in order to check if the bus is free. Depending on your circuit, you may want to change the settings (esp. invert/no invert) in the configuration. 
 
 
-
 ## Installation
 
 The easiest way is to install using `pipx`:
 
-`pipx install https://github.com/loehnertj/bsbgateway`.
-
-(TBD: pypi Release)
+`pipx install bsbgateway`
 
 Alternatively and/or for hacking, you can clone the repository, then run `bsbgateway.sh`. It will automatically setup a local venv, install the project in editable mode and run it.
 
 In both cases, you get `bsbgateway` as user-mode-program. In order to set it up and configure as system service, use the management mode (`bsbgateway manage`). See following sections.
+
+You will need a device description file. See [devices](https://github.com/loehnertj/bsbgateway/devices)
 
 ## After installation
 
@@ -170,6 +169,7 @@ Planned:
 * MQTT endpoint for Home Assistant
 
 Done:
+(version 1.0 @ 2026-01-31)
 
 * Do not configure in `.py` files anymore (config.py, "device".py). Instead, use ini / json files.
 * Completely replace device model and packet reader/writer code.

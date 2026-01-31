@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "BsbGateway"
-version = "0.1.0"
+version = "1.0.0"
 description = "Read and write data on a BSB (Boiler System Bus)"
 authors = [{name = "Johannes Loehnert", email = "loehnert.kde@gmx.de"}]
 license = "LGPL-3.0-or-later"
@@ -29,6 +29,7 @@ classifiers = [
     "Topic :: Home Automation",
     "Topic :: System :: Monitoring",
 ]
+requires-python = ">=3.8"
 
 packages = [
     { include = "bsbgateway", from = "src" }
