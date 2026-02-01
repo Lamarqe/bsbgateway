@@ -74,7 +74,6 @@ class EventSource(object):
             thread = Thread(target=o._run_wrapper, name=o.name)
             thread.daemon = o._as_daemon
             thread.start()
-            return thread
         else:
             o._run_wrapper()
 

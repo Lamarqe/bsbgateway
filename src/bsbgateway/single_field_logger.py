@@ -6,6 +6,7 @@ import os
 import dataclasses as dc
 
 from bsbgateway.bsb.model import BsbCommand, BsbDatatype, BsbModel, BsbType
+from bsbgateway.consumer_base import ConsumerBase
 from bsbgateway.hub.event import event
 
 @dc.dataclass
@@ -35,7 +36,7 @@ class LoggerConfig:
         return len(o.field_disp_ids) > 0
 
 
-class SingleFieldLogger:
+class SingleFieldLogger(ConsumerBase):
     _last_save_time = 0
     _last_saved_value = None
     _dtype:BsbType|None = None

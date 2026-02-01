@@ -2,14 +2,13 @@
 # Copyright (c) 2026 Johannes Löhnert <loehnert.kde@gmx.de>
 
 import logging
-import datetime
 from queue import Empty
 
 from flask import render_template, request, jsonify
 from werkzeug.exceptions import BadRequest, InternalServerError, NotFound
 
 from bsbgateway.bsb.model import BsbCommand, BsbDatatype
-from bsbgateway.web_interface import Web2Bsb
+from bsbgateway.web_interface import WebInterface
 from .utils import format_readonly_value, format_range, parse_value
 
 log = lambda: logging.getLogger(__name__)
@@ -23,7 +22,7 @@ DATETIME_CTL_MAP = {
 
 def register_routes(
     app,
-    web2bsb: "Web2Bsb",
+    web2bsb: "WebInterface",
     dash_fields: list[BsbCommand] | None = None,
     dash_breaks: list[int] | None = None,
 ):
@@ -129,6 +128,7 @@ def register_routes(
     @app.route("/field-<int:field_id>.value", methods=["GET"])
     def field_get_value(field_id):
         value_info = get_field_value(field_id)
+        # FIXME: mangle data if needed
         return jsonify(value_info)
 
     @app.route("/field-<int:field_id>", methods=["POST"])

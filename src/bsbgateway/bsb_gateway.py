@@ -8,7 +8,8 @@ import signal
 import logging
 from queue import Queue
 
-from bsbgateway.hub.adapter import get_adapter
+from .consumer_base import ConsumerBase
+from .hub.adapter import get_adapter
 
 from .hub.event_sources import SyncedSecondTimerSource
 from .single_field_logger import SingleFieldLogger
@@ -28,15 +29,13 @@ class BsbGateway(object):
     * bsbcomm: (de)serialization of bytes messages.
         * turns rx_bytes into bsb_telegrams events
         * turns send_get/send_set into tx_bytes calls
-    * loggers: list of dataloggers
-    * cmd_interface: command line interface
-    * web_interface: web interface
+    * consumers: list of consumer modules.
 
     The latter three modules are optional. Each of them can send
     get/set requests, and receives bsb_telegrams and send_error events.
 
     """
-    def __init__(o, adapter, bsbcomm, loggers, cmd_interface=None,web_interface=None, bsb2tcp=None):
+    def __init__(o, adapter, bsbcomm, consumers: list[ConsumerBase], bsb2tcp=None):
         o._queue = Queue()
         o._running = False
 
@@ -45,9 +44,7 @@ class BsbGateway(object):
         o._adapter = adapter
         o._bsbcomm = bsbcomm
         o.bsb2tcp = bsb2tcp
-        o.loggers = loggers
-        o.web_interface = web_interface
-        o.cmd_interface = cmd_interface
+        o.consumers = consumers[:]
         
     def run(o):
         o.setup_modules()
@@ -74,24 +71,7 @@ class BsbGateway(object):
         o._bsbcomm.send_error += _marshal(o.on_send_error)
         # BSB Comm manages the throttle thread, thus we need to start it here
         o._bsbcomm.start_thread()
-        
-        if o.cmd_interface:
-            o.cmd_interface.quit += _marshal(o.quit)
-            o.cmd_interface.send_get += _marshal(o.on_send_get)
-            o.cmd_interface.send_set += _marshal(o.on_send_set)
-            o.cmd_interface.start_thread()
-        else:
-            log().info('Running without cmdline interface. Use Ctrl+C or SIGTERM to quit.')
-        
-        if o.web_interface:
-            o.web_interface.web2bsb.send_get += _marshal(o.on_send_get)
-            o.web_interface.web2bsb.send_set += _marshal(o.on_send_set)
-            o.web_interface.start_thread()
 
-        for logger in o.loggers:
-            logger.send_get += _marshal(o.on_send_get)
-            # Logger driven by timer tick - no need to start
-        
         if o.bsb2tcp:
             # BSB2TCP, bypassing BSB Comm (works on bytes level)
             # forward received TCP data to IO Adapter and vice versa
@@ -99,6 +79,21 @@ class BsbGateway(object):
             o._adapter.rx_bytes += _marshal(o.bsb2tcp.tx_bytes)
 
             o.bsb2tcp.start()
+
+        has_cmd_interface = False
+        for consumer in o.consumers:
+            # Consumer modules
+            if hasattr(consumer, "send_get"):
+                consumer.send_get += _marshal(o.on_send_get)
+            if hasattr(consumer, "send_set"):
+                consumer.send_set += _marshal(o.on_send_set)
+            consumer.start_thread()
+            if isinstance(consumer, CmdInterface):
+                has_cmd_interface = True
+                consumer.quit += _marshal(o.quit)
+        
+        if not has_cmd_interface:
+            log().info('Running without cmdline interface. Use Ctrl+C or SIGTERM to quit.')
 
         # Register signal handlers for clean shutdown
         signal.signal(signal.SIGTERM, lambda signum, frame: _marshal(o.quit)("SIGTERM"))
@@ -127,24 +122,21 @@ class BsbGateway(object):
             getattr(o, 'on_%s_event'%evtype)(evdata)
 
     def on_timer_tick(o):
-        for logger in o.loggers:
-            logger.tick()
+        for consumer in o.consumers:
+            try:
+                consumer.tick()
+            except Exception as e:
+                log().exception(f"Error in consumer {consumer}: {e}")
 
     def on_bsb_telegrams(o, telegrams):
         """Distribute to consumer modules"""
-        if o.cmd_interface:
-            o.cmd_interface.on_bsb_telegrams(telegrams)
-        if o.web_interface:
-            o.web_interface.web2bsb.on_bsb_telegrams(telegrams)
-        for logger in o.loggers:
-            logger.on_bsb_telegrams(telegrams)
+        for consumer in o.consumers:
+            consumer.on_bsb_telegrams(telegrams)
 
     def on_send_error(o, error: Exception, disp_id: int, from_address: int):
         """Distribute to consumer modules"""
-        if o.cmd_interface:
-            o.cmd_interface.on_send_error(error, disp_id, from_address)
-        if o.web_interface:
-            o.web_interface.web2bsb.on_send_error(error, disp_id, from_address)
+        for consumer in o.consumers:
+            consumer.on_send_error(error, disp_id, from_address)
 
     def on_send_get(o, disp_id:int, from_address:int):
         o._bsbcomm.send_get(disp_id, from_address)
@@ -157,10 +149,8 @@ class BsbGateway(object):
         if o.bsb2tcp:
             # Not a daemon, must be stopped explicitly
             o.bsb2tcp.stop()
-        if o.cmd_interface:
-            o.cmd_interface.stop()
-        if o.web_interface:
-            o.web_interface.stop()
+        for consumer in o.consumers:
+            consumer.stop()
         o._bsbcomm.stop()
         o._adapter.stop()
         o._running = False
@@ -197,32 +187,27 @@ def run(config:config_reader.Config):
     # TODO: choose adapter class based on adapter_device setting
     adapter = get_adapter(config.adapter)
     bsbcomm = BsbComm(config.adapter, model)
-    
-    loggers = SingleFieldLogger.from_config(config.loggers, model)
-    if loggers:
-        if not os.path.exists(p:=config.loggers.tracefile_dir):
-            log().info(f'Creating trace directory {p}')
-            os.makedirs(p)
 
     if config.bsb2tcp.enable:
         bsb2tcp = Bsb2Tcp(config.bsb2tcp)
     else:
         bsb2tcp = None
 
+    consumers:list[ConsumerBase] = []
     if config.cmd_interface.enable:
-        cmd_interface = CmdInterface(config.cmd_interface, model)
-    else:
-        cmd_interface = None
+        consumers.append(CmdInterface(config.cmd_interface, model))
     if config.web_interface.enable:
-        web_interface = WebInterface(config.web_interface, model) 
-    else:
-        web_interface = None
+        consumers.append( WebInterface(config.web_interface, model))
+    loggers = SingleFieldLogger.from_config(config.loggers, model)
+    if loggers:
+        if not os.path.exists(p:=config.loggers.tracefile_dir):
+            log().info(f'Creating trace directory {p}')
+            os.makedirs(p)
+        consumers.extend(loggers)
                 
     BsbGateway(
         adapter=adapter,
         bsbcomm=bsbcomm,
-        loggers=loggers,
-        cmd_interface=cmd_interface,
-        web_interface=web_interface,
+        consumers=consumers,
         bsb2tcp=bsb2tcp,
     ).run()

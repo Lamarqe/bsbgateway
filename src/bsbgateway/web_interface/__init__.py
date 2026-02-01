@@ -10,6 +10,7 @@ from werkzeug.serving import make_server
 
 from bsbgateway.bsb.model import BsbCategory, BsbCommand, BsbModel
 from bsbgateway.bsb.bsb_telegram import BsbTelegram
+from bsbgateway.consumer_base import ConsumerBase
 from bsbgateway.hub.event_sources import EventSource
 from bsbgateway.hub.event import event
 from .config import WebInterfaceConfig
@@ -17,15 +18,16 @@ from .config import WebInterfaceConfig
 log = lambda: logging.getLogger(__name__)
 
 
-class WebInterface(EventSource):
+class WebInterface(EventSource, ConsumerBase):
     """Web interface for BSB Gateway using Flask."""
     # Leave me time to shut down properly
     _as_daemon = False
 
     def __init__(self, config: WebInterfaceConfig, device:BsbModel):
         self.device = device
-        self.web2bsb = Web2Bsb(device, bsb_address=config.bsb_address)
         self.port = config.port
+        self.bsb_address = config.bsb_address
+        self.pending_web_requests = []
 
         # Build dashboard fields and break points
         dash_fields = []
@@ -56,7 +58,7 @@ class WebInterface(EventSource):
         from . import routes
 
         routes.register_routes(
-            self.app, self.web2bsb, self.dash_fields, self.dash_breaks
+            self.app, self, self.dash_fields, self.dash_breaks
         )
 
         log().info("Web interface listening on http://0.0.0.0:%d/", self.port)
@@ -70,15 +72,6 @@ class WebInterface(EventSource):
         if self.server:
             self.server.shutdown()
             self.server = None
-
-
-class Web2Bsb:
-    """Bridge between web interface and BSB backend."""
-
-    def __init__(self, device:BsbModel, bsb_address=25):
-        self.device:BsbModel = device
-        self.bsb_address = bsb_address
-        self.pending_web_requests = []
 
     @property
     def fields(self) -> dict[int, "BsbCommand"]:

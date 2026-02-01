@@ -83,7 +83,8 @@ Not yet implemented.
 BsbGateway consists of well-separated modules, that interact via events and method calls.
 
 * Components receive messages by normal method calls, and send messages via `@event` methods.
-* Usually they require one or more internal threads, which are started by `<component>.start_thread()`.
+* A "consumer" module can send "get" and "set" requests to the bus, and receives all telegrams sent to the bus. The template for it is [consumer_base.py](../src/bsbgateway/consumer_base.py). Subclasses need only override stuff they use.
+* Sometimes they require one or more internal threads, which can started by `<component>.start_thread()`.
 
 ### Adding custom functionality
 
@@ -94,8 +95,9 @@ import threading
 
 from .bsb.bsb_telegram import BsbTelegram
 from .hub.event import event
+from .consumer_base import ConsumerBase
 
-class ExampleModule:
+class ExampleModule(ConsumerBase):
     bsb_address = 29
     disp_id = 8700
 
@@ -139,45 +141,27 @@ Take note of:
 
 Save e.g. to `example_module.py`.
 
-To make BsbGateway use this module, you have to extend [bsb_gateway.py](../src/bsbgateway/bsb_gateway.py):
+To make BsbGateway use this module, you have to extend [bsb_gateway.py](../src/bsbgateway/bsb_gateway.py).  Instanciate your module in `run()` and add it the `consumers` list.  `BsbGateway.run()` will automatically call `.start_thread()` and connect to the events. On `quit()`, it will call `ExampleModule.stop()` for clean shutdown.
 
-1. Instanciate your module and add it as member to `BsbGateway`.
-2. In `setup_modules()`, connect the relevant events - just copy what you see here.
-3. Also in `setup_modules()`, call the `ExampleModule.start_thread()` method
-4. In the `quit()` method, call `ExampleModule.stop()` for clean shutdown.
-
-The added lines might look like this:
+Example:
 
 ```python
-from my_module import MyModule
+from example_module import ExampleModule
 
-# ...
-class BsbGateway:
-    def __init__(o, ...):
-        # ...
-        o.my_module = MyModule()
+#...
+def run():
     #...
-    def setup_modules(o):
-        # ...
-        # _marshal will queue all incoming events on the main thread.
-        o.my_module.send_get += _marshal(o.on_send_get)
-        o.my_module.start_thread()
-    #...
-    def on_bsb_telegrams(o, telegrams):
-        #...
-        o.my_module.on_bsb_telegrams(telegrams)
-    #... 
-    def quit(o, ...):
-        #...
-        o.my_module.stop()
+    consumers.append(ExampleModule())
+
+    # already there
+    BsbGateway(
+        ...
+    ).run()
 ```
-
-As you see, the only "magic" thing happening here is the event processing. Don't
-worry about it and just copy what's already there.
 
 ### Custom I/O Adapter
 
-You might want to use a custom driver to talk to the bus. An Adapter is just another kind of module. It must implement the following interface:
+You might want to use a custom driver to talk to the bus. An Adapter implements the following interface:
 
 ```python
 class MyAdapter:
@@ -204,6 +188,8 @@ def get_adapter(settings: AdapterSettings) -> SerialSource|TcpAdapter|MyAdapter:
         return MyAdapter()
     #...
 ```
+
+Finally, in the configuration, set Adapter / adapter_type to "my_adapter".
 
 ### Using device information: BsbModel
 

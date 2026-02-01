@@ -8,6 +8,7 @@ import dataclasses as dc
 
 from bsbgateway.bsb.bsb_telegram import BsbTelegram
 from bsbgateway.bsb.model import BsbCommand, BsbDatatype, BsbModel, ScheduleEntry
+from bsbgateway.consumer_base import ConsumerBase
 from bsbgateway.hub.event import event
 
 from .hub.event_sources import EventSource, StdinSource
@@ -94,7 +95,8 @@ CMDS = [
     }
 ]
 
-class CmdInterface(EventSource):
+# Inheritance order is important: EventSources's start_thread() shall have precedence over ConsumerBase's.
+class CmdInterface(EventSource, ConsumerBase):
     def __init__(o, config:CmdInterfaceConfig, device:BsbModel):
         o.device:BsbModel = device
         o.bsb_address = config.bsb_address
