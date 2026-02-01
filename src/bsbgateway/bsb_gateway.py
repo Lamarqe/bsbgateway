@@ -8,6 +8,8 @@ import signal
 import logging
 from queue import Queue
 
+from bsbgateway.mqtt.mqtt_module import MqttModule
+
 from .consumer_base import ConsumerBase
 from .hub.adapter import get_adapter
 
@@ -210,6 +212,8 @@ def run(config:config_reader.Config):
         consumers.append(CmdInterface(config.cmd_interface, model))
     if config.web_interface.enable:
         consumers.append( WebInterface(config.web_interface, model))
+    if config.mqtt_interface.enable:
+        consumers.append(MqttModule(config.mqtt_interface, model) )
     loggers = SingleFieldLogger.from_config(config.loggers, model)
     if loggers:
         if not os.path.exists(p:=config.loggers.tracefile_dir):

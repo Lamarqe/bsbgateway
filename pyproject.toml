@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -47,6 +47,7 @@ dependencies = [
     "attrs",
     "cattrs (>=24.1.0)",
     "quickrpc",
+    "ha-mqtt-discoverable (>=0.23.0)",
 ]
 
 [project.optional-dependencies]

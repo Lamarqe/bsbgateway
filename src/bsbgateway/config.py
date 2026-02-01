@@ -7,6 +7,7 @@ from .single_field_logger import LoggerConfig
 from .cmd_interface import CmdInterfaceConfig
 from .web_interface.config import WebInterfaceConfig
 from .bsb2tcp import Bsb2TcpSettings
+from .mqtt.mqtt_module import MqttConfig
 
 @dc.dataclass
 class Config:
@@ -21,6 +22,8 @@ class Config:
     """Web interface configuration."""
     cmd_interface: CmdInterfaceConfig = dc.field(default_factory=CmdInterfaceConfig)
     """Command line interface configuration."""
+    mqtt_interface: MqttConfig = dc.field(default_factory=MqttConfig)
+    """Home Assistant MQTT interface configuration."""
     loggers: LoggerConfig = dc.field(default_factory=LoggerConfig)
     """Dataloggers"""
 
