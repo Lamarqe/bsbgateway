@@ -87,7 +87,10 @@ class BsbGateway(object):
                 consumer.send_get += _marshal(o.on_send_get)
             if hasattr(consumer, "send_set"):
                 consumer.send_set += _marshal(o.on_send_set)
-            consumer.start_thread()
+            try:
+                consumer.start_thread()
+            except Exception as e:
+                log().exception(f"Error starting module {consumer}: {e}")
             if isinstance(consumer, CmdInterface):
                 has_cmd_interface = True
                 consumer.quit += _marshal(o.quit)
@@ -131,12 +134,18 @@ class BsbGateway(object):
     def on_bsb_telegrams(o, telegrams):
         """Distribute to consumer modules"""
         for consumer in o.consumers:
-            consumer.on_bsb_telegrams(telegrams)
+            try:
+                consumer.on_bsb_telegrams(telegrams)
+            except Exception as e:
+                log().exception(f"Error in consumer {consumer} handling telegrams: {e}")
 
     def on_send_error(o, error: Exception, disp_id: int, from_address: int):
         """Distribute to consumer modules"""
         for consumer in o.consumers:
-            consumer.on_send_error(error, disp_id, from_address)
+            try:
+                consumer.on_send_error(error, disp_id, from_address)
+            except Exception as e:
+                log().exception(f"Error in consumer {consumer} handling send_error: {e}")
 
     def on_send_get(o, disp_id:int, from_address:int):
         o._bsbcomm.send_get(disp_id, from_address)
@@ -150,7 +159,10 @@ class BsbGateway(object):
             # Not a daemon, must be stopped explicitly
             o.bsb2tcp.stop()
         for consumer in o.consumers:
-            consumer.stop()
+            try:
+                consumer.stop()
+            except Exception as e:
+                log().exception(f"Error stopping module {consumer}: {e}")
         o._bsbcomm.stop()
         o._adapter.stop()
         o._running = False
