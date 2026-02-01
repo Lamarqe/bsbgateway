@@ -1,9 +1,10 @@
 from configparser import ConfigParser
-from bsbgateway.config_reader import _create_default_config, _config_to_configparser, _parse_config
+from bsbgateway.config import Config
+from bsbgateway.config_reader import _config_to_configparser, _parse_config
 
 
 def test_serialize_config():
-    config = _create_default_config()
+    config = Config()
     # most complicated type
     config.web_interface.web_dashboard = [ [700, 710, 8005], [1620, None, 8830]]
     cp = _config_to_configparser(config)

@@ -9,31 +9,9 @@ from typing import Any
 from cattrs import Converter
 from cattrs.cols import is_sequence, list_structure_factory
 
-
-from .gateway_config import GatewayConfig
-from .bsb.bsb_comm import AdapterSettings
-from .single_field_logger import LoggerConfig
-from .cmd_interface import CmdInterfaceConfig
-from .web_interface.config import WebInterfaceConfig
-from .bsb2tcp import Bsb2TcpSettings
+from .config import Config
 
 L = lambda: logging.getLogger(__name__)
-
-@dc.dataclass
-class Config:
-    """Configuration of BSB Gateway."""
-    gateway: GatewayConfig
-    """Global gateway configuration: Device name and logging."""
-    adapter: AdapterSettings
-    """Settings for the serial adapter."""
-    bsb2tcp: Bsb2TcpSettings
-    """Configuration for the BSB to TCP/IP bridge."""
-    web_interface: WebInterfaceConfig
-    """Web interface configuration."""
-    cmd_interface: CmdInterfaceConfig
-    """Command line interface configuration."""
-    loggers: LoggerConfig
-    """Dataloggers"""
 
 def xdg_config_home() -> Path:
     return Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
@@ -69,7 +47,7 @@ def load_config(force_path:Path|None) -> tuple[Path|None, Config]:
     
     if config_file is None or not config_file.exists():
         L().info("No config file found, using defaults")
-        return config_file, _create_default_config()
+        return config_file, Config()
     
     L().info(f"Loading config from {config_file}")
     parser = cp.ConfigParser()
@@ -77,18 +55,6 @@ def load_config(force_path:Path|None) -> tuple[Path|None, Config]:
     
     config = _parse_config(parser)
     return config_file, config
-
-
-def _create_default_config() -> Config:
-    """Create a default configuration."""
-    return Config(
-        gateway=GatewayConfig(),
-        adapter=AdapterSettings(),
-        web_interface=WebInterfaceConfig(),
-        cmd_interface=CmdInterfaceConfig(),
-        loggers=LoggerConfig(),
-        bsb2tcp=Bsb2TcpSettings(),
-    )
 
 
 def _parse_config(parser: cp.ConfigParser) -> Config:
