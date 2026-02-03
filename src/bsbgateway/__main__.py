@@ -3,7 +3,7 @@ import datetime
 from pathlib import Path
 import sys
 
-from .manage import cli_menu
+from .manage import cli_menu, change_loglevels
 from . import bsb_gateway
 from . import config_reader
 
@@ -26,7 +26,8 @@ def main():
         elif word == "manage":
             manage = True
     path, config = config_reader.load_config(force_path)
-    logging.basicConfig(level=config.gateway.loglevel)
+    logging.basicConfig(level="WARNING")
+    change_loglevels(config.gateway.loglevel)
     log().info('BsbGateway (c) J. Loehnert 2013-2026, starting @%s' % 
                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
     log().info("Using config file: %s", path)
