@@ -121,17 +121,44 @@ def _get_info(field: BsbCommand) -> HaFieldInfo:
     # default: generic sensor, value converted by str()
     return HFI("", "")
 
+class MyEntityBase:
+    """Base class for our simplified and unified MQTT entities.
+    
+    - simplified: no need to create EntityInfo and Settings separately.
+    - unified: Common update_from_bsb() method to set the state from a BSB value;
+      common set_from_mqtt() event to forward MQTT command to BSB.
+    """
+    @event
+    def set_from_mqtt(disp_id: int, value: Any):  # type:ignore
+        """Set a value received from MQTT to the BSB bus.
+        
+        Payload is the value received from MQTT, already converted to the correct type by the MQTT entity.
+        """
 
-class MyBinarySensor(BinarySensor):
+    def update_from_bsb(self, value: Any):
+        """Set the state of the MQTT entity from a value received from the BSB bus.
+        
+        Payload is the value decoded from the BSB telegram, before any conversion for Home Assistant.
+        """
+        raise NotImplementedError("Must be implemented by subclass.")
+
+
+class MyBinarySensor(BinarySensor, MyEntityBase):
     """Binary sensor with value conversion."""
 
     def __init__(
-        self, mqtt, entity: BinarySensorInfo, value_converter: Callable[[Any], Any] | None
+        self, mqtt, device, field: BsbCommand, hass_field_info: HaFieldInfo
     ):
+        entity = BinarySensorInfo(
+            device=device,
+            unique_id=f"{device.name}_{field.disp_id}",
+            name=field.disp_name,
+            device_class=hass_field_info.device_class or None,
+        )
         super().__init__(Settings(mqtt=mqtt, entity=entity))
-        self._value_converter = value_converter
+        self._value_converter = hass_field_info.converter
 
-    def set_state(self, value: Any):
+    def update_from_bsb(self, value: Any):
         """Set the state of the binary sensor."""
         if self._value_converter:
             super().update_state(self._value_converter(value))
@@ -139,20 +166,35 @@ class MyBinarySensor(BinarySensor):
             super().update_state(value)
 
 
-class MySensor(Sensor):
+class MySensor(Sensor, MyEntityBase):
     """Sensor with value conversion."""
 
-    def __init__(self, mqtt, entity: SensorInfo, value_converter: Callable[[Any], Any] | None):
+    def __init__(
+        self, 
+        mqtt,
+        device,
+        field: BsbCommand,
+        hass_field_info: HaFieldInfo,
+    ):
+        entity = SensorInfo(
+            device=device,
+            unique_id=f"{device.name}_{field.disp_id}",
+            name=field.disp_name,
+            # "measurement": This is a current-time reading, not an aggregate or forecast.
+            state_class="measurement",
+            device_class=hass_field_info.device_class or None,
+            # Only certain units are allowed. So don't rely on the field metadata, prefer the infered unit.
+            unit_of_measurement=hass_field_info.unit or field.unit,
+        )
         super().__init__(Settings(mqtt=mqtt, entity=entity))
-        self._value_converter = value_converter
+        self._value_converter = hass_field_info.converter
 
-    def set_state(self, state: Any, last_reset: Any = None):
+    def update_from_bsb(self, value: Any):
         """Set the state of the sensor."""
         if self._value_converter:
-            super().set_state(self._value_converter(state), last_reset=last_reset)
+            super().set_state(self._value_converter(value))
         else:
-            super().set_state(state, last_reset=last_reset)
-
+            super().set_state(value)
 
 class MqttModule(ConsumerBase):
     def __init__(self, config: MqttConfig, bsb_model: BsbModel):
@@ -188,6 +230,10 @@ class MqttModule(ConsumerBase):
     def send_get(disp_id: int, from_address: int):  # type:ignore
         """Request a GET command to be sent to the bus"""
 
+    @event
+    def send_set(disp_id: int, value: Any, from_address: int, validate: bool): # type:ignore
+        """Request a SET command to be sent to the bus."""
+
     # inbound interface
     def on_bsb_telegrams(self, telegrams: list[BsbTelegram]):
         """Handle incoming BSB telegrams"""
@@ -195,7 +241,7 @@ class MqttModule(ConsumerBase):
             # Don't filter by destination. We don't care who asked.
             if telegram.packettype in ("ret", "set", "inf"):
                 if telegram.field.disp_id in self.entities:
-                    self.entities[telegram.field.disp_id].set_state(telegram.data)
+                    self.entities[telegram.field.disp_id].update_from_bsb(telegram.data)
 
     def start_thread(self):
         """Starts the example module. Threads are created implicitly by MQTT setup."""
@@ -218,9 +264,10 @@ class MqttModule(ConsumerBase):
         for disp_id in self.config.fields:
             field = self.bsb_model.fields[disp_id]
             entity = self._field2entity(field, device_info, mqtt_settings)
+            entity.set_from_mqtt += self._on_set_from_mqtt
             self.entities[field.disp_id] = entity
 
-    def _field2entity(self, field: BsbCommand, device_info: DeviceInfo, mqtt):
+    def _field2entity(self, field: BsbCommand, device_info: DeviceInfo, mqtt) -> MyEntityBase:
         """Helper to create an MQTT entity info from a BSB field."""
         hass_field_info = _get_info(field)
         if BsbCommandFlags.Readonly not in field.flags:
@@ -228,27 +275,12 @@ class MqttModule(ConsumerBase):
             pass
         if hass_field_info.device_class == "binary":
             # Binary Sensor
-            info = BinarySensorInfo(
-                device=device_info,
-                unique_id=f"{self.config.hass_id}_{field.disp_id}",
-                name=field.disp_name,
-                device_class=hass_field_info.device_class,
-            )
-            L().debug("Binary Sensor info: %s", info)
-            return MyBinarySensor(mqtt=mqtt, entity=info, value_converter=hass_field_info.converter)
+            return MyBinarySensor(mqtt=mqtt, device=device_info, field=field, hass_field_info=hass_field_info)
         # Sensor
-        info = SensorInfo(
-            device=device_info,
-            unique_id=f"{self.config.hass_id}_{field.disp_id}",
-            name=field.disp_name,
-            # "measurement": This is a current-time reading, not an aggregate or forecast.
-            state_class="measurement",
-            device_class=hass_field_info.device_class or None,
-            # Only certain units are allowed. So don't rely on the field metadata, prefer the infered unit.
-            unit_of_measurement=hass_field_info.unit or field.unit,
+        return MySensor(
+            mqtt=mqtt, 
+            device=device_info,field=field, hass_field_info=hass_field_info
         )
-        L().debug("Sensor info: %s", info)
-        return MySensor(mqtt=mqtt, entity=info, value_converter=hass_field_info.converter)
 
     def tick(self):
         """Poll the BSB bus at regular intervals."""
@@ -275,6 +307,10 @@ class MqttModule(ConsumerBase):
                 # to avoid bus overload.
                 disp_id = next(self.disp_ids_to_poll_rw)
                 self.send_get(disp_id, self.config.bsb_address)
+
+    def _on_set_from_mqtt(self, disp_id: int, value: Any):
+        """Handle a set command received from MQTT."""
+        self.send_set(disp_id, value, self.config.bsb_address, validate=True)
 
     def stop(self):
         self._mqtt_ready = False
