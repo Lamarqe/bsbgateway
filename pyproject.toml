@@ -47,7 +47,10 @@ dependencies = [
     "attrs",
     "cattrs (>=24.1.0)",
     "quickrpc",
-    "ha-mqtt-discoverable (>=0.23.0)",
+    # ha-mqtt-device (fork of ha-mqtt-discoverable) is vendored (see packages= below).
+    # Thus, we need to copy its dependencies here.
+    "paho-mqtt==2.1.0",
+    "pydantic==2.12.5", # get rid of me :-(
 ]
 
 [project.optional-dependencies]
@@ -62,6 +65,13 @@ dev = [
 [project.scripts]
 bsbgateway = "bsbgateway.__main__:main"
 
+[tool.hatch.build.targets.wheel]
+# Tell Hatch which package directories to include in the built wheel.
+# The `packages` entries are paths (relative to the project root) to the package dirs.
+packages = [
+    "src/bsbgateway",
+    "modules/ha-mqtt-device/ha_mqtt_device",
+]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

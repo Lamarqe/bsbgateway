@@ -3,8 +3,8 @@ import itertools as it
 import logging
 from typing import Any, Callable
 
-from ha_mqtt_discoverable import Settings, DeviceInfo
-from ha_mqtt_discoverable.sensors import (
+from ha_mqtt_device import Settings, DeviceInfo
+from ha_mqtt_device.sensors import (
     BinarySensor,
     BinarySensorInfo,
     Sensor,
