@@ -1,0 +1,3 @@
+[submodule "modules/ha-mqtt-device"]
+	path = modules/ha-mqtt-device
+	url = https://github.com/loehnertj/ha-mqtt-discoverable

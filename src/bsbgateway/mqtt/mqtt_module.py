@@ -11,6 +11,10 @@ from ha_mqtt_discoverable.sensors import (
     SensorInfo,
     Number,
     NumberInfo,
+    Switch,
+    SwitchInfo,
+    Select,
+    SelectInfo,
 )
 from paho.mqtt.client import Client, MQTTMessage
 
@@ -44,6 +48,12 @@ class HaFieldInfo:
     """Convert the BSB field value to a suitable format for Home Assistant.
     
     If not set, no conversion is done."""
+    rw_entity: str = ""
+    """Entity class to choose if the field is writable
+    
+    Empty string if we don't support this type - then the representation is
+    read-only even if the field is writable.
+    """
 
 
 def _get_info(field: BsbCommand) -> HaFieldInfo:
@@ -68,7 +78,7 @@ def _get_info(field: BsbCommand) -> HaFieldInfo:
         case BsbDatatype.Enum:
             if field_type.name in ("ONOFF", "YESNO"):
                 # "binary is not actually allowed for a sensor, instead it will become a binary_sensor.
-                return HFI("binary", "", lambda val: "ON" if val else "OFF")
+                return HFI("binary", "", lambda val: "ON" if val else "OFF", rw_entity="switch")
             else:
                 options = {}
                 if field_type.name == "WEEKDAY":
@@ -82,13 +92,18 @@ def _get_info(field: BsbCommand) -> HaFieldInfo:
                         6: "Saturday",
                     }
                 options.update({key: str(val) for key, val in field.enum.items()})
-                return HFI("enum", "", lambda val: options.get(val, f"Unknown ({val})"))
+                return HFI(
+                    "enum", "", lambda val: options.get(val, f"Unknown ({val})"), rw_entity="select"
+                )
         case BsbDatatype.String:
+            # We could set rw_entity="text", however typically strings are read-only status fields.
             return HFI("", "")
         case BsbDatatype.TimeProgram:
             convert = lambda value: ", ".join(
                 f"{se.on.strftime('%H:%M')}-{se.off.strftime('%H:%M')}" for se in value
             )
+            # TODO: how to make this writable? Could use the text format as in
+            # the web interface, but that seems a bit fragile.
             return HFI("", "", convert)
         case BsbDatatype.Bits:
             # val is bytes type
@@ -117,38 +132,61 @@ def _get_info(field: BsbCommand) -> HaFieldInfo:
     # For lookup, remove suffix. E.g we have SECONDS, SECONDS_WORD, SECONDS_SHORT etc -> map all to SECONDS
     name, _, _ = field_type.name.partition("_")
     if name in vals_types:
-        return vals_types[name]
+        return dc.replace(vals_types[name], rw_entity="number")
     # default: generic sensor, value converted by str()
-    return HFI("", "")
+    return HFI("", "", rw_entity="number")
+
 
 class MyEntityBase:
     """Base class for our simplified and unified MQTT entities.
-    
+
     - simplified: no need to create EntityInfo and Settings separately.
     - unified: Common update_from_bsb() method to set the state from a BSB value;
       common set_from_mqtt() event to forward MQTT command to BSB.
     """
+
+    field: BsbCommand
+
     @event
     def set_from_mqtt(disp_id: int, value: Any):  # type:ignore
         """Set a value received from MQTT to the BSB bus.
-        
+
         Payload is the value received from MQTT, already converted to the correct type by the MQTT entity.
         """
 
     def update_from_bsb(self, value: Any):
         """Set the state of the MQTT entity from a value received from the BSB bus.
-        
+
         Payload is the value decoded from the BSB telegram, before any conversion for Home Assistant.
         """
         raise NotImplementedError("Must be implemented by subclass.")
+
+    def convert_bsb2mqtt(self, value: Any, /) -> Any:
+        """Convert a BSB value to the appropriate type for MQTT payload."""
+        # This method will be overridden by the specific entity classes (e.g. switch, number) to convert the value accordingly.
+        return value
+
+    def callback(self, client: Client, user_data, msg: MQTTMessage):
+        """Callback function to handle MQTT messages for writable entities."""
+        try:
+            payload = msg.payload.decode("utf-8")
+            value = self.convert_mqtt2bsb(payload)
+            L().info(f"Set field {self.field.disp_id} to value {value!r} (MQTT payload was {payload!r})")
+            self.set_from_mqtt(self.field.disp_id, value)
+        except Exception as e:
+            L().exception("Error processing MQTT command for field %s: %s", self.field.disp_id, e)
+
+    def convert_mqtt2bsb(self, payload: str) -> Any:
+        """Convert the MQTT payload string to the appropriate type for the BSB field."""
+        # This method will be overridden by the specific entity classes (e.g. switch, number) to convert the payload accordingly.
+        return payload
 
 
 class MyBinarySensor(BinarySensor, MyEntityBase):
     """Binary sensor with value conversion."""
 
-    def __init__(
-        self, mqtt, device, field: BsbCommand, hass_field_info: HaFieldInfo
-    ):
+    def __init__(self, mqtt, device, field: BsbCommand, hass_field_info: HaFieldInfo):
+        self.field = field
         entity = BinarySensorInfo(
             device=device,
             unique_id=f"{device.name}_{field.disp_id}",
@@ -156,26 +194,25 @@ class MyBinarySensor(BinarySensor, MyEntityBase):
             device_class=hass_field_info.device_class or None,
         )
         super().__init__(Settings(mqtt=mqtt, entity=entity))
-        self._value_converter = hass_field_info.converter
+        if hass_field_info.converter:
+            self.convert_bsb2mqtt = hass_field_info.converter
 
     def update_from_bsb(self, value: Any):
         """Set the state of the binary sensor."""
-        if self._value_converter:
-            super().update_state(self._value_converter(value))
-        else:
-            super().update_state(value)
+        super().update_state(self.convert_bsb2mqtt(value))
 
 
 class MySensor(Sensor, MyEntityBase):
     """Sensor with value conversion."""
 
     def __init__(
-        self, 
+        self,
         mqtt,
         device,
         field: BsbCommand,
         hass_field_info: HaFieldInfo,
     ):
+        self.field = field
         entity = SensorInfo(
             device=device,
             unique_id=f"{device.name}_{field.disp_id}",
@@ -187,14 +224,141 @@ class MySensor(Sensor, MyEntityBase):
             unit_of_measurement=hass_field_info.unit or field.unit,
         )
         super().__init__(Settings(mqtt=mqtt, entity=entity))
-        self._value_converter = hass_field_info.converter
+        if hass_field_info.converter:
+            self.convert_bsb2mqtt = hass_field_info.converter
 
     def update_from_bsb(self, value: Any):
         """Set the state of the sensor."""
-        if self._value_converter:
-            super().set_state(self._value_converter(value))
+        super().set_state(self.convert_bsb2mqtt(value))
+
+
+class MyNumber(Number, MyEntityBase):
+    """Number entity with value conversion."""
+
+    def __init__(
+        self,
+        mqtt,
+        device,
+        field: BsbCommand,
+        hass_field_info: HaFieldInfo,
+    ):
+        self.field = field
+        entity = NumberInfo(
+            device=device,
+            unique_id=f"{device.name}_{field.disp_id}",
+            name=field.disp_name,
+            unit_of_measurement=hass_field_info.unit or field.unit,
+        )
+        super().__init__(Settings(mqtt=mqtt, entity=entity), command_callback=self.callback)
+        if hass_field_info.converter:
+            self.convert_bsb2mqtt = hass_field_info.converter
+
+    def update_from_bsb(self, value: Any):
+        """Set the state of the number entity."""
+        super().set_value(self.convert_bsb2mqtt(value))
+
+    def convert_mqtt2bsb(self, payload: str) -> Any:
+        """Convert the MQTT payload string to a number."""
+        # Just let callback() handle any exceptions.
+        if "." in payload:
+            return float(payload)
         else:
-            super().set_state(value)
+            return int(payload)
+
+class MySelect(Select, MyEntityBase):
+    """Select entity with value conversion."""
+
+    def __init__(
+        self,
+        mqtt,
+        device,
+        field: BsbCommand,
+        hass_field_info: HaFieldInfo,
+    ):
+        self.field = field
+        self._option2num = {str(val).lower(): key for key, val in field.enum.items()}
+        entity = SelectInfo(
+            device=device,
+            unique_id=f"{device.name}_{field.disp_id}",
+            name=field.disp_name,
+            options=[str(val) for val in field.enum.values()],
+        )
+        super().__init__(s:=Settings(mqtt=mqtt, entity=entity), command_callback=self.callback)
+        if hass_field_info.converter:
+            self.convert_bsb2mqtt = hass_field_info.converter
+
+    def update_from_bsb(self, value: Any):
+        """Set the state of the select entity."""
+        # conversion of numeric value to option string is handled by
+        # convert_bsb2mqtt, which is set to the appropriate enum-to-string
+        # converter in _get_info().
+        # TODO: code smell here!
+        super().select_option(self.convert_bsb2mqtt(value))
+
+    def convert_mqtt2bsb(self, payload: str) -> Any:
+        """Convert the MQTT payload string to the corresponding enum value."""
+        # Just let callback() handle any exceptions.
+        if payload.lower() not in self._option2num:
+            raise ValueError(f"Invalid option for select entity: {payload}")
+        return self._option2num[payload.lower()]
+
+class MySwitch(Switch, MyEntityBase):
+    """Switch entity with value conversion."""
+
+    def __init__(
+        self,
+        mqtt,
+        device,
+        field: BsbCommand,
+        hass_field_info: HaFieldInfo,
+    ):
+        self.field = field
+        entity = SwitchInfo(
+            device=device,
+            unique_id=f"{device.name}_{field.disp_id}",
+            name=field.disp_name,
+        )
+        super().__init__(Settings(mqtt=mqtt, entity=entity), command_callback=self.callback)
+        if hass_field_info.converter:
+            self.convert_bsb2mqtt = hass_field_info.converter
+
+    def update_from_bsb(self, value: Any):
+        """Set the state of the switch."""
+        if self.convert_bsb2mqtt(value):
+            super().on()
+        else:
+            super().off()
+
+    def convert_mqtt2bsb(self, payload: str) -> Any:
+        """Convert the MQTT payload string to a boolean."""
+        val = payload.strip().upper()
+        if val in ("ON", "1", "TRUE"):
+            return True
+        elif val in ("OFF", "0", "FALSE"):
+            return False
+        else:
+            raise ValueError(f"Invalid payload for switch: {payload}")
+
+def _field2entity(field: BsbCommand, device_info: DeviceInfo, mqtt) -> MyEntityBase:
+    """Helper to create an MQTT entity info from a BSB field."""
+    hass_field_info = _get_info(field)
+    if BsbCommandFlags.Readonly not in field.flags and hass_field_info.rw_entity:
+        # Create writable entity
+        match hass_field_info.rw_entity:
+            case "switch":
+                cls = MySwitch
+            case "number":
+                cls = MyNumber
+            case "select":
+                cls = MySelect
+            case _:
+                cls = MySensor
+    else:
+        if hass_field_info.device_class == "binary":
+            cls = MyBinarySensor
+        else:
+            cls = MySensor
+    return cls(mqtt=mqtt, device=device_info, field=field, hass_field_info=hass_field_info)
 
 class MqttModule(ConsumerBase):
     def __init__(self, config: MqttConfig, bsb_model: BsbModel):
@@ -231,7 +395,7 @@ class MqttModule(ConsumerBase):
         """Request a GET command to be sent to the bus"""
 
     @event
-    def send_set(disp_id: int, value: Any, from_address: int, validate: bool): # type:ignore
+    def send_set(disp_id: int, value: Any, from_address: int, validate: bool):  # type:ignore
         """Request a SET command to be sent to the bus."""
 
     # inbound interface
@@ -263,24 +427,9 @@ class MqttModule(ConsumerBase):
         self.entities = {}
         for disp_id in self.config.fields:
             field = self.bsb_model.fields[disp_id]
-            entity = self._field2entity(field, device_info, mqtt_settings)
+            entity = _field2entity(field, device_info, mqtt_settings)
             entity.set_from_mqtt += self._on_set_from_mqtt
             self.entities[field.disp_id] = entity
-
-    def _field2entity(self, field: BsbCommand, device_info: DeviceInfo, mqtt) -> MyEntityBase:
-        """Helper to create an MQTT entity info from a BSB field."""
-        hass_field_info = _get_info(field)
-        if BsbCommandFlags.Readonly not in field.flags:
-            # TODO: Create writable entity if sensibly possible.
-            pass
-        if hass_field_info.device_class == "binary":
-            # Binary Sensor
-            return MyBinarySensor(mqtt=mqtt, device=device_info, field=field, hass_field_info=hass_field_info)
-        # Sensor
-        return MySensor(
-            mqtt=mqtt, 
-            device=device_info,field=field, hass_field_info=hass_field_info
-        )
 
     def tick(self):
         """Poll the BSB bus at regular intervals."""
