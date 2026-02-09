@@ -50,7 +50,6 @@ dependencies = [
     # ha-mqtt-device (fork of ha-mqtt-discoverable) is vendored (see packages= below).
     # Thus, we need to copy its dependencies here.
     "paho-mqtt==2.1.0",
-    "pydantic==2.12.5", # get rid of me :-(
 ]
 
 [project.optional-dependencies]
