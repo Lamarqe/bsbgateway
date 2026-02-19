@@ -26,7 +26,7 @@ def main():
         elif word == "manage":
             manage = True
     path, config = config_reader.load_config(force_path)
-    logging.basicConfig(level="WARNING")
+    logging.basicConfig(level="WARNING", format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     change_loglevels(config.gateway.loglevel)
     log().info('BsbGateway (c) J. Loehnert 2013-2026, starting @%s' % 
                datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
