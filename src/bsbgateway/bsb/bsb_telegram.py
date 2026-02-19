@@ -95,7 +95,7 @@ class BsbTelegram(object):
         """
         if data[0] != 0xDC:
             raise DecodeError("bad start marker")
-        if len(data) < 4 or len(data) < data[3]:
+        if len(data) < 11 or len(data) < data[3]:
             raise DecodeError("incomplete telegram")
 
         if data[4] not in _PACKETTYPES:
