@@ -158,6 +158,22 @@ If something doesn't work:
 3. Check the [Troubleshooting guide](doc/troubleshooting.md)
 4. Contact me via Github.
 
+## Acknowledgements
+
+This project would not exist without the initial reverse-engineering done by
+[Niobos](http://blog.dest-unreach.be/2012/12/14/reverse-engineering-the-elco-heating-protocol).
+
+Lots of work was done by the guys at
+[mikrocontroller.net](https://www.mikrocontroller.net/topic/218643).
+
+I got lots of useful advice and information from fredlcore, the mastermind
+behind [BSB-LAN](https://github.com/fredlcore/BSB-LAN). His project is more
+awesome than mine. Seriously.
+
+As of v1.1, this project includes a modified fork of
+[ha-mqtt-discoverable](https://github.com/unixorn/ha-mqtt-discoverable). All
+files of the fork are distributed under the original Apache-2.0 license.
+
 
 ## Changelog
 
@@ -169,9 +185,15 @@ Planned:
 * Add "edit-model" mode with automatic sniffing + adding of fields
 
 
-(to be released)
+(version 1.1 @ 2026-02-23)
 
-* Home Assistant-compatible MQTT endpoint
+* Home Assistant-compatible MQTT endpoint. To this end, a custom version of
+  ha_mqtt_discoverable is now "vendored", which uses builtin dataclasses instead
+  of pydantic.
+* optional per-module loglevel adjustment
+* improved error handling
+* stricter telegram validity checking (length check)
+* internal refactoring (define ConsumerBase class)
 
 (version 1.0 @ 2026-01-31)
 
