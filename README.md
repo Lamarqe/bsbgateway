@@ -141,6 +141,7 @@ Look in [manage.py](src/bsbgateway/manage.py) if you want to know the exact comm
 
  * **[Commandline Interface](doc/cmdline.md)** - Query fields, set values, sniff the bus
  * **[Web Interface](doc/web.md)** - Browser-based control and monitoring
+ * **[MQTT Interface](doc/mqtt.md)** - for interfacing with Home Assistant
  * **[Logging](doc/logging.md)** - Data logging with configurable intervals
  * **[Protocol Reference](doc/protocol.md)** - BSB protocol details
  * **[Hardware](doc/hardware.md)** - Adapter circuit specifications
@@ -166,9 +167,12 @@ Planned:
 
 * Test correct reading+writing of all datatypes with actual device
 * Add "edit-model" mode with automatic sniffing + adding of fields
-* MQTT endpoint for Home Assistant
 
-Done:
+
+(to be released)
+
+* Home Assistant-compatible MQTT endpoint
+
 (version 1.0 @ 2026-01-31)
 
 * Do not configure in `.py` files anymore (config.py, "device".py). Instead, use ini / json files.
