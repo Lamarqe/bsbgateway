@@ -248,6 +248,8 @@ class MyNumber(Number, MyEntityBase):
             unique_id=f"{device.name}_{field.disp_id}",
             name=field.disp_name,
             unit_of_measurement=hass_field_info.unit or field.unit,
+            min=field.min_value or 0.0,
+            max=field.max_value or 100.0,
         )
         super().__init__(Settings(mqtt=mqtt, entity=entity), command_callback=self.callback)
         if hass_field_info.converter:
