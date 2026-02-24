@@ -5,6 +5,7 @@ Functionalities offered:
 
  * [Commandline interface](doc/cmdline.md). Enter `help` to get list of commands, `help <cmd>` for documentation of a specific command.
  * [Web interface](doc/web.md) at port :8082 (e.g. http://localhost:8082)
+ * [MQTT Interface](doc/mqtt.md) for interfacing with Home Assistant (or other MQTT endpoints)
  * [Logging of fields](doc/logging.md) with preset interval. The logs are written in ASCII `.trace` files and can be loaded with `trace/load_trace.py` into `numpy` arrays.
 
  ## If you are updating from a previous version
