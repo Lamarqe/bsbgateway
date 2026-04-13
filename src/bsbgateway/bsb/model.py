@@ -44,6 +44,9 @@ def as_json(thing, indent=2):
 
 _TYPES_FILE = Path(__file__).with_name("bsb-types.json")
 
+# Context variable for cattr hooks to access the current default language
+_default_language_context = "DE"
+
 def _load_default_types():
     """Returns dictionary of default BsbTypes, keyed by typename."""
     model = BsbModel.parse_file(str(_TYPES_FILE))
@@ -61,6 +64,8 @@ class BsbModel:
     """Actual command entries by category"""
     types: Dict[str, "BsbType"] = attr.Factory(_load_default_types)
     """Known types"""
+    default_language: str = "DE"
+    """Default language code for I18nstr serialization (e.g. 'DE', 'EN')"""
 
     @property
     def commands(self):
@@ -83,18 +88,44 @@ class BsbModel:
         return {cmd.telegram_id: cmd for cmd in self.commands}
     
     @classmethod
-    def parse_obj(cls, obj, link_types=True):
-        model = cattr.structure(obj, cls)
-        if link_types:
-            model.link_types()
-        return model
+    def parse_obj(cls, obj, link_types=True, default_language=None):
+        """Parse object into BsbModel.
+        
+        Args:
+            obj: Dictionary or JSON-like object to parse
+            link_types: If True, link command types from typename to actual type instance
+            default_language: Default language code for I18nstr serialization (e.g. 'DE', 'EN')
+                            If not specified, extracted from obj['default_language'] or defaults to 'DE'
+        """
+        global _default_language_context
+        
+        # Extract default_language from object if present
+        if default_language is None:
+            default_language = obj.get("default_language", "DE")
+        
+        # Set context for hooks to access during structure phase
+        old_context = _default_language_context
+        _default_language_context = default_language
+        
+        try:
+            model = cattr.structure(obj, cls)
+            # Store the default_language on the model instance
+            model.default_language = default_language
+            if link_types:
+                model.link_types()
+            return model
+        finally:
+            _default_language_context = old_context
 
     @classmethod
-    def parse_file(cls, filename, link_types=True):
+    def parse_file(cls, filename, link_types=True, default_language=None):
         with open(filename, "r") as f:
             ud = json.load(f)
         ud.setdefault("name", Path(filename).stem)
-        return cls.parse_obj(ud, link_types=link_types)
+        # Extract default_language from file if not specified
+        if default_language is None and "default_language" in ud:
+            default_language = ud["default_language"]
+        return cls.parse_obj(ud, link_types=link_types, default_language=default_language)
 
     def json(self, indent=2):
         return as_json(self, indent=indent)
@@ -436,12 +467,66 @@ class ScheduleEntry:
 
 
 # Set up serialization / deserialization
+
+# First, register I18nstr hooks so they're available when other hooks use them
+def _structure_i18nstr(d, T):
+    """Structure hook for I18nstr.
+    
+    Accepts both strings and dicts:
+    - If input is a string, wrap it as {default_language: text}
+    - If input is a dict, convert to I18nstr normally
+    """
+    if isinstance(d, str):
+        # Wrap plain string with default language
+        return T({_default_language_context: d})
+    else:
+        # Normal dict-to-I18nstr conversion
+        return T(d)
+
+def _unstructure_i18nstr(obj):
+    """Unstructure hook for I18nstr.
+    
+    If the I18nstr contains only the default language as a single key,
+    serialize as a plain string. Otherwise serialize as a dict.
+    """
+    if len(obj) == 1 and _default_language_context in obj:
+        # Single entry with default language - return as string
+        return obj[_default_language_context]
+    else:
+        # Multiple entries or not in default language - return as dict
+        return dict(obj)
+
+cattr.register_structure_hook(I18nstr, _structure_i18nstr)
+cattr.register_unstructure_hook(I18nstr, _unstructure_i18nstr)
+
+# Now register hooks for other types
 #cattr.register_unstructure_hook(BsbCommand, lambda *args, **kwargs: 1/0)
 # !!! Order is apparently important when registering the hooks (!?)
-for T in [BsbType, BsbCommand, BsbCategory, BsbModel]:
+for T in [BsbType, BsbCommand, BsbCategory]:
     attr.resolve_types(T)
     cattr.register_unstructure_hook(T, make_dict_unstructure_fn(T, cattr.global_converter, _cattrs_omit_if_default=True))
-cattr.register_structure_hook(I18nstr, lambda d, T: T(d))
+
+# Resolve BsbModel types and register custom unstructure hook
+attr.resolve_types(BsbModel)
+
+def _unstructure_bsb_model(model):
+    """Custom unstructure hook for BsbModel.
+    
+    Sets the context to the model's default_language before unstructuring
+    to ensure that I18nstr fields are serialized correctly.
+    """
+    global _default_language_context
+    old_context = _default_language_context
+    _default_language_context = model.default_language
+    
+    try:
+        # Use the standard unstructure function for BsbModel
+        fn = make_dict_unstructure_fn(BsbModel, cattr.global_converter, _cattrs_omit_if_default=True)
+        return fn(model)
+    finally:
+        _default_language_context = old_context
+
+cattr.register_unstructure_hook(BsbModel, _unstructure_bsb_model)
 
 def dedup_types(model: BsbModel) -> BsbModel:
     """Deduplicates command types

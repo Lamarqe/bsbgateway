@@ -187,4 +187,185 @@ def test_merge_types(ty_model):
         merge(ty_model, m2)
     for property in ["name", "datatype", "factor", "payload_length", "enable_byte", "payload_flags"]:
         assert property in str(exc.value)
+
+
+# Tests for I18nstr serialization/deserialization with default_language
+
+def test_structure_i18nstr_plain_string():
+    """When structuring a plain string to I18nstr with default_language='DE',
+    it should be wrapped as {DE: text}"""
+    # Parse with default_language='DE'
+    obj = {
+        "version": "1.0",
+        "compiletime": "20240101000000",
+        "default_language": "DE"
+    }
+    m = model.BsbModel.parse_obj(obj, default_language="DE")
+    
+    # Now structure a plain string to I18nstr using the context
+    # We need to set the context since we're not inside a parse_obj call
+    old_context = model._default_language_context
+    model._default_language_context = "DE"
+    try:
+        i18n = cattr.structure("Hallo Welt", model.I18nstr)
+        assert i18n["DE"] == "Hallo Welt"
+        assert len(i18n) == 1
+    finally:
+        model._default_language_context = old_context
+
+
+def test_structure_i18nstr_dict_still_works():
+    """When structuring a dict to I18nstr, it should work as before"""
+    obj = {
+        "version": "1.0",
+        "compiletime": "20240101000000",
+    }
+    m = model.BsbModel.parse_obj(obj, default_language="DE")
+    
+    # Structure a dict with multiple languages
+    old_context = model._default_language_context
+    model._default_language_context = "DE"
+    try:
+        i18n = cattr.structure({"DE": "Hallo", "EN": "Hello"}, model.I18nstr)
+        assert i18n["DE"] == "Hallo"
+        assert i18n["EN"] == "Hello"
+        assert len(i18n) == 2
+    finally:
+        model._default_language_context = old_context
+
+
+def test_unstructure_i18nstr_single_default_language():
+    """When unstructuring I18nstr with only default_language key,
+    it should become a plain string"""
+    old_context = model._default_language_context
+    model._default_language_context = "DE"
+    try:
+        i18n = model.I18nstr({"DE": "Hallo Welt"})
+        result = cattr.unstructure(i18n)
+        assert result == "Hallo Welt"
+        assert isinstance(result, str)
+    finally:
+        model._default_language_context = old_context
+
+
+def test_unstructure_i18nstr_multiple_languages():
+    """When unstructuring I18nstr with multiple languages,
+    it should remain a dict"""
+    old_context = model._default_language_context
+    model._default_language_context = "DE"
+    try:
+        i18n = model.I18nstr({"DE": "Hallo", "EN": "Hello"})
+        result = cattr.unstructure(i18n)
+        assert isinstance(result, dict)
+        assert result["DE"] == "Hallo"
+        assert result["EN"] == "Hello"
+    finally:
+        model._default_language_context = old_context
+
+
+def test_unstructure_i18nstr_different_language():
+    """When unstructuring I18nstr where default is DE but only EN is present,
+    it should remain a dict (not matching default language)"""
+    old_context = model._default_language_context
+    model._default_language_context = "DE"
+    try:
+        i18n = model.I18nstr({"EN": "Hello"})
+        result = cattr.unstructure(i18n)
+        assert isinstance(result, dict)
+        assert result["EN"] == "Hello"
+    finally:
+        model._default_language_context = old_context
+
+
+def test_roundtrip_single_language():
+    """Test full roundtrip: plain string -> parse -> unstructure -> plain string"""
+    # Create test data with a plain string instead of dict
+    testdata = {
+        "version": "1.0",
+        "compiletime": "20240101000000",
+        "default_language": "DE",
+        "categories": {
+            "100": {
+                "name": "Kategorie Name",  # Plain string instead of dict!
+                "min": 100,
+                "max": 200,
+                "commands": []
+            }
+        }
+    }
+    
+    # Parse it - the plain string should be wrapped with {DE: text}
+    m = model.BsbModel.parse_obj(testdata)
+    assert isinstance(m.categories["100"].name, model.I18nstr)
+    assert m.categories["100"].name["DE"] == "Kategorie Name"
+    
+    # Unstructure it back
+    result = cattr.unstructure(m)
+    assert result["categories"]["100"]["name"] == "Kategorie Name"
+    assert isinstance(result["categories"]["100"]["name"], str)
+
+
+def test_roundtrip_multiple_languages():
+    """Test roundtrip with multiple languages - should stay as dict"""
+    testdata = {
+        "version": "1.0",
+        "compiletime": "20240101000000",
+        "default_language": "DE",
+        "categories": {
+            "100": {
+                "name": {
+                    "DE": "Kategorie Name",
+                    "EN": "Category Name"
+                },
+                "min": 100,
+                "max": 200,
+                "commands": []
+            }
+        }
+    }
+    
+    # Parse it
+    m = model.BsbModel.parse_obj(testdata)
+    assert isinstance(m.categories["100"].name, model.I18nstr)
+    assert m.categories["100"].name["DE"] == "Kategorie Name"
+    assert m.categories["100"].name["EN"] == "Category Name"
+    
+    # Unstructure it back - should remain as dict
+    result = cattr.unstructure(m)
+    assert isinstance(result["categories"]["100"]["name"], dict)
+    assert result["categories"]["100"]["name"]["DE"] == "Kategorie Name"
+    assert result["categories"]["100"]["name"]["EN"] == "Category Name"
+
+
+def test_parse_obj_with_custom_default_language():
+    """Test that parse_obj accepts and uses custom default_language"""
+    testdata = {
+        "version": "1.0",
+        "compiletime": "20240101000000",
+        "categories": {
+            "100": {
+                "name": "Kategorie Name",
+                "min": 100,
+                "max": 200,
+                "commands": []
+            }
+        }
+    }
+    
+    # Parse with EN as default language
+    m = model.BsbModel.parse_obj(testdata, default_language="EN")
+    assert m.default_language == "EN"
+    assert isinstance(m.categories["100"].name, model.I18nstr)
+    assert m.categories["100"].name["EN"] == "Kategorie Name"
+    
+    # Unstructure with EN as context
+    old_context = model._default_language_context
+    model._default_language_context = "EN"
+    try:
+        result = cattr.unstructure(m)
+        # Should be plain string since EN matches default
+        assert result["categories"]["100"]["name"] == "Kategorie Name"
+        assert isinstance(result["categories"]["100"]["name"], str)
+    finally:
+        model._default_language_context = old_context
     
