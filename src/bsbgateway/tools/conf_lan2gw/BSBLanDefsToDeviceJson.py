@@ -59,7 +59,7 @@ def get_enum(enumstr):
           key = int("0x" + key_str.replace('\\x', ''), 16)
       else:
           key = int(key_str)
-      enum_dict[str(key)] = { "DE": value }
+      enum_dict[str(key)] = value
     return enum_dict
 
 def create_command(line, cmd, desc, flags) -> dict:
@@ -127,11 +127,10 @@ def main():
         device_json = {
             "version": "2.1.0",
             "compiletime": datetime.now().strftime("%Y%m%d%H%M%S"),
+            "default_language": "DE",
             "categories": {
                 "1": {
-                    "name": {
-                      "DE": "Allgemein",
-                    },
+                    "name": "Allgemein",
                     "min": 1,
                     "max": 65536,
                     "commands": bsb_commands
